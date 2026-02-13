@@ -8,15 +8,17 @@ from pydantic import ValidationError
 
 from .errors import ValidationFailure
 from .plugin_api import BaseExporter, BaseExtractor, PluginOptions
-from .plugins.exporters import (
+from .plugins.preview_exporters import (
     DefaultPreviewBBoxExporter,
     DefaultPreviewSegExporter,
-    DefaultYoloExporter,
 )
-from .plugins.extractors import (
+from .plugins.seg_bbox_extractors import (
     DefaultBothExtractor,
     DefaultDetectionExtractor,
     DefaultSegmentExtractor,
+)
+from .plugins.yolo_exporters import (
+    DefaultYoloExporter,
 )
 
 ExtractorType: TypeAlias = BaseExtractor[Any]
