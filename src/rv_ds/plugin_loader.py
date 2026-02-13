@@ -2,7 +2,7 @@ import importlib.util
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Any, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
 
 from pydantic import ValidationError
 
@@ -16,6 +16,7 @@ from .plugins.extractors import (
 )
 
 TPlugin = TypeVar("TPlugin", bound=BaseExtractor | BaseExporter)
+PluginKind = Literal["extractor", "exporter"]
 
 
 @dataclass(frozen=True)
@@ -36,47 +37,56 @@ BUILTIN_EXPORTERS: dict[str, type[BaseExporter]] = {
 
 
 def load_extractor(spec: str, opts: dict[str, Any]) -> tuple[BaseExtractor, LoadedPlugin]:
-    if spec in BUILTIN_EXTRACTORS:
-        plugin_class = BUILTIN_EXTRACTORS[spec]
-        extractor = _instantiate_plugin(
-            plugin_class,
-            opts,
-            plugin_type="extractor",
-            plugin_name=spec,
-        )
-        return extractor, LoadedPlugin(name=spec, source="builtin")
-
-    module = _load_module_from_path(spec)
-    plugin_class = _load_plugin_class(module, "ExtractorPlugin", BaseExtractor)
-    extractor = _instantiate_plugin(
-        plugin_class,
-        opts,
-        plugin_type="extractor",
-        plugin_name=spec,
+    plugin, loaded = _load_plugin(
+        kind="extractor",
+        spec=spec,
+        opts=opts,
+        builtin_registry=BUILTIN_EXTRACTORS,
+        plugin_symbol="ExtractorPlugin",
+        expected_base=BaseExtractor,
     )
-    return extractor, LoadedPlugin(name=spec, source="path")
+    return cast(BaseExtractor, plugin), loaded
 
 
 def load_exporter(spec: str, opts: dict[str, Any]) -> tuple[BaseExporter, LoadedPlugin]:
-    if spec in BUILTIN_EXPORTERS:
-        plugin_class = BUILTIN_EXPORTERS[spec]
-        exporter = _instantiate_plugin(
+    plugin, loaded = _load_plugin(
+        kind="exporter",
+        spec=spec,
+        opts=opts,
+        builtin_registry=BUILTIN_EXPORTERS,
+        plugin_symbol="ExporterPlugin",
+        expected_base=BaseExporter,
+    )
+    return cast(BaseExporter, plugin), loaded
+
+
+def _load_plugin(
+    kind: PluginKind,
+    spec: str,
+    opts: dict[str, Any],
+    builtin_registry: dict[str, type[TPlugin]],
+    plugin_symbol: str,
+    expected_base: type[TPlugin],
+) -> tuple[TPlugin, LoadedPlugin]:
+    if spec in builtin_registry:
+        plugin_class = builtin_registry[spec]
+        plugin = _instantiate_plugin(
             plugin_class,
             opts,
-            plugin_type="exporter",
+            plugin_type=kind,
             plugin_name=spec,
         )
-        return exporter, LoadedPlugin(name=spec, source="builtin")
+        return plugin, LoadedPlugin(name=spec, source="builtin")
 
     module = _load_module_from_path(spec)
-    plugin_class = _load_plugin_class(module, "ExporterPlugin", BaseExporter)
-    exporter = _instantiate_plugin(
+    plugin_class = _load_plugin_class(module, plugin_symbol, expected_base)
+    plugin = _instantiate_plugin(
         plugin_class,
         opts,
-        plugin_type="exporter",
+        plugin_type=kind,
         plugin_name=spec,
     )
-    return exporter, LoadedPlugin(name=spec, source="path")
+    return plugin, LoadedPlugin(name=spec, source="path")
 
 
 def _instantiate_plugin(
