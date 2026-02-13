@@ -7,9 +7,9 @@ from typing import Any
 
 from .errors import ValidationFailure
 from .ir import DatasetIR
-from .plugin_api import ExportContext, ExporterRunResult, ExtractionContext
+from .plugin_api import BaseExtractor, ExportContext, ExporterRunResult, ExtractionContext
 from .plugin_loader import load_exporter, load_extractor
-from .scanner import discover_samples
+from .scanner import SamplePaths, discover_samples
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,24 @@ class ExportResult:
     stats: ExportStats
 
 
+@dataclass
+class PreparedContexts:
+    samples: list[SamplePaths]
+    export_dir: Path
+    extractor: BaseExtractor
+    extractor_info: Any
+    extraction_ctx: ExtractionContext
+    exporter_opts: dict[str, Any]
+    framework_opts_exporter: dict[str, Any]
+
+
+@dataclass
+class ExportPhaseResult:
+    export_ctx: ExportContext
+    export_result: ExporterRunResult
+    exporter_info: Any
+
+
 def load_json_opts(path: Path | None) -> dict[str, Any]:
     if path is None:
         return {}
@@ -59,6 +77,13 @@ def load_json_opts(path: Path | None) -> dict[str, Any]:
 
 
 def run_export(config: ExportConfig) -> ExportResult:
+    prepared = prepare_contexts(config)
+    dataset = run_extraction(config, prepared)
+    export_phase = run_exporter(config, prepared, dataset)
+    return finalize_meta(config, prepared, dataset, export_phase)
+
+
+def prepare_contexts(config: ExportConfig) -> PreparedContexts:
     samples = discover_samples(config.dataset_dir, config.image_file)
     export_dir = _build_export_dir(config.output_dir)
     export_dir.mkdir(parents=True, exist_ok=False)
@@ -76,8 +101,20 @@ def run_export(config: ExportConfig) -> ExportResult:
         framework_options=framework_opts_extractor,
     )
 
+    return PreparedContexts(
+        samples=samples,
+        export_dir=export_dir,
+        extractor=extractor,
+        extractor_info=extractor_info,
+        extraction_ctx=extraction_ctx,
+        exporter_opts=exporter_opts,
+        framework_opts_exporter=framework_opts_exporter,
+    )
+
+
+def run_extraction(config: ExportConfig, prepared: PreparedContexts) -> DatasetIR:
     try:
-        dataset = extractor.extract_dataset(extraction_ctx)
+        dataset = prepared.extractor.extract_dataset(prepared.extraction_ctx)
     except Exception as exc:  # noqa: BLE001
         raise ValidationFailure(
             f"extractor '{config.extractor_spec}' failed while processing dataset: {exc}"
@@ -91,22 +128,30 @@ def run_export(config: ExportConfig) -> ExportResult:
 
     dataset.validate()
 
-    if extraction_ctx.warnings and config.fail_on_plugin_warning:
-        joined = " | ".join(extraction_ctx.warnings)
+    if prepared.extraction_ctx.warnings and config.fail_on_plugin_warning:
+        joined = " | ".join(prepared.extraction_ctx.warnings)
         raise ValidationFailure(
             f"extractor produced warnings and fail-on-warning is set: {joined}"
         )
 
     if config.dump_ir:
-        (export_dir / "ir_dump.json").write_text(
+        (prepared.export_dir / "ir_dump.json").write_text(
             json.dumps(dataset.to_dict(), indent=2), encoding="utf-8"
         )
 
-    exporter, exporter_info = load_exporter(config.exporter_spec, exporter_opts)
+    return dataset
+
+
+def run_exporter(
+    config: ExportConfig, prepared: PreparedContexts, dataset: DatasetIR
+) -> ExportPhaseResult:
+    exporter, exporter_info = load_exporter(
+        config.exporter_spec, prepared.exporter_opts
+    )
     export_ctx = ExportContext(
         dataset=dataset,
-        output_dir=export_dir,
-        framework_options=framework_opts_exporter,
+        output_dir=prepared.export_dir,
+        framework_options=prepared.framework_opts_exporter,
     )
 
     try:
@@ -117,7 +162,7 @@ def run_export(config: ExportConfig) -> ExportResult:
         ) from exc
 
     export_result = _normalize_exporter_result(raw_export_result)
-    _validate_export_outputs(export_dir, export_ctx, export_result)
+    _validate_export_outputs(prepared.export_dir, export_ctx, export_result)
 
     if export_ctx.warnings and config.fail_on_plugin_warning:
         joined = " | ".join(export_ctx.warnings)
@@ -125,28 +170,41 @@ def run_export(config: ExportConfig) -> ExportResult:
             f"exporter produced warnings and fail-on-warning is set: {joined}"
         )
 
+    return ExportPhaseResult(
+        export_ctx=export_ctx,
+        export_result=export_result,
+        exporter_info=exporter_info,
+    )
+
+
+def finalize_meta(
+    config: ExportConfig,
+    prepared: PreparedContexts,
+    dataset: DatasetIR,
+    export_phase: ExportPhaseResult,
+) -> ExportResult:
     stats = ExportStats(
-        discovered_samples=len(samples),
+        discovered_samples=len(prepared.samples),
         extracted_samples=len(dataset.samples),
         exporter_outputs=(
-            len(export_result.outputs)
-            if export_result.outputs
-            else len(export_ctx.outputs)
+            len(export_phase.export_result.outputs)
+            if export_phase.export_result.outputs
+            else len(export_phase.export_ctx.outputs)
         ),
     )
 
     _write_meta(
-        path=export_dir / "rv_ds_meta.json",
+        path=prepared.export_dir / "rv_ds_meta.json",
         config=config,
         stats=stats,
-        extractor_info=extractor_info,
-        exporter_info=exporter_info,
-        extraction_warnings=list(extraction_ctx.warnings),
-        export_warnings=list(export_ctx.warnings),
-        exporter_result=export_result,
+        extractor_info=prepared.extractor_info,
+        exporter_info=export_phase.exporter_info,
+        extraction_warnings=list(prepared.extraction_ctx.warnings),
+        export_warnings=list(export_phase.export_ctx.warnings),
+        exporter_result=export_phase.export_result,
     )
 
-    return ExportResult(export_dir=export_dir, stats=stats)
+    return ExportResult(export_dir=prepared.export_dir, stats=stats)
 
 
 def _read_framework_opts(opts: dict[str, Any]) -> dict[str, Any]:
