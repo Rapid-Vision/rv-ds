@@ -16,3 +16,4 @@ wheels/
 
 .local/
 .tmp/
+tmp/

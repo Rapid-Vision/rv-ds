@@ -18,7 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--extractor-opts", type=Path)
     export_parser.add_argument("--exporter", required=True)
     export_parser.add_argument("--exporter-opts", type=Path)
-    export_parser.add_argument("--output", type=Path, default=Path("./exports"))
+    export_parser.add_argument("--output", "-o", type=Path, default=Path("./exports"))
     export_parser.add_argument("--image-file", default="Image.png")
     export_parser.add_argument("--fail-on-plugin-warning", action="store_true")
     export_parser.add_argument("--dump-ir", action="store_true")
