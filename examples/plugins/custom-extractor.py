@@ -1,6 +1,11 @@
 from rv_ds.errors import ValidationFailure
 from rv_ds.ir import DatasetIR, InstanceRecord, SampleRecord
-from rv_ds.plugin_api import BaseExtractor, PluginOptions
+from rv_ds.plugin_api import (
+    INSTANCE_BBOX,
+    INSTANCE_CLASS,
+    BaseExtractor,
+    PluginOptions,
+)
 from rv_ds.sdk import (
     extract_bbox,
     load_scene_meta,
@@ -16,6 +21,7 @@ class ExtractorOptions(PluginOptions):
 
 class ExtractorPlugin(BaseExtractor[ExtractorOptions]):
     OptionsModel = ExtractorOptions
+    produced_features = frozenset({INSTANCE_CLASS, INSTANCE_BBOX})
 
     def __init__(self, opts: ExtractorOptions) -> None:
         super().__init__(opts)

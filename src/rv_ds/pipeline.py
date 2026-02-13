@@ -7,7 +7,13 @@ from typing import Any
 
 from .errors import ValidationFailure
 from .ir import DatasetIR
-from .plugin_api import BaseExtractor, ExportContext, ExporterRunResult, ExtractionContext
+from .plugin_api import (
+    BaseExporter,
+    BaseExtractor,
+    ExportContext,
+    ExporterRunResult,
+    ExtractionContext,
+)
 from .plugin_loader import load_exporter, load_extractor
 from .scanner import SamplePaths, discover_samples
 
@@ -44,8 +50,9 @@ class PreparedContexts:
     export_dir: Path
     extractor: BaseExtractor[Any]
     extractor_info: Any
+    exporter: BaseExporter[Any]
+    exporter_info: Any
     extraction_ctx: ExtractionContext
-    exporter_opts: dict[str, Any]
     framework_opts_exporter: dict[str, Any]
 
 
@@ -94,6 +101,13 @@ def prepare_contexts(config: ExportConfig) -> PreparedContexts:
     exporter_opts = _strip_framework_opts(config.exporter_opts)
 
     extractor, extractor_info = load_extractor(config.extractor_spec, extractor_opts)
+    exporter, exporter_info = load_exporter(config.exporter_spec, exporter_opts)
+    _validate_feature_contract(
+        extractor=extractor,
+        exporter=exporter,
+        extractor_spec=config.extractor_spec,
+        exporter_spec=config.exporter_spec,
+    )
     extraction_ctx = ExtractionContext(
         dataset_dir=config.dataset_dir,
         image_file=config.image_file,
@@ -106,8 +120,9 @@ def prepare_contexts(config: ExportConfig) -> PreparedContexts:
         export_dir=export_dir,
         extractor=extractor,
         extractor_info=extractor_info,
+        exporter=exporter,
+        exporter_info=exporter_info,
         extraction_ctx=extraction_ctx,
-        exporter_opts=exporter_opts,
         framework_opts_exporter=framework_opts_exporter,
     )
 
@@ -145,9 +160,6 @@ def run_extraction(config: ExportConfig, prepared: PreparedContexts) -> DatasetI
 def run_exporter(
     config: ExportConfig, prepared: PreparedContexts, dataset: DatasetIR
 ) -> ExportPhaseResult:
-    exporter, exporter_info = load_exporter(
-        config.exporter_spec, prepared.exporter_opts
-    )
     export_ctx = ExportContext(
         dataset=dataset,
         output_dir=prepared.export_dir,
@@ -155,7 +167,7 @@ def run_exporter(
     )
 
     try:
-        raw_export_result = exporter.export_dataset(export_ctx)
+        raw_export_result = prepared.exporter.export_dataset(export_ctx)
     except Exception as exc:  # noqa: BLE001
         raise ValidationFailure(
             f"exporter '{config.exporter_spec}' failed while exporting dataset: {exc}"
@@ -173,8 +185,26 @@ def run_exporter(
     return ExportPhaseResult(
         export_ctx=export_ctx,
         export_result=export_result,
-        exporter_info=exporter_info,
+        exporter_info=prepared.exporter_info,
     )
+
+
+def _validate_feature_contract(
+    extractor: BaseExtractor[Any],
+    exporter: BaseExporter[Any],
+    extractor_spec: str,
+    exporter_spec: str,
+) -> None:
+    produced = set(extractor.produced_features)
+    required = set(exporter.required_features)
+    missing = required - produced
+    if missing:
+        raise ValidationFailure(
+            "extractor/exporter feature contract mismatch:\n"
+            f"extractor='{extractor_spec}'\n\tproduced={sorted(produced)};\n"
+            f"exporter='{exporter_spec}'\n\trequired={sorted(required)};\n"
+            f"missing={sorted(missing)}"
+        )
 
 
 def finalize_meta(

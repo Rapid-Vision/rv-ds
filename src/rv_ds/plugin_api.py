@@ -6,6 +6,13 @@ from typing import Any, ClassVar, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
+from .contracts import (
+    INSTANCE_BBOX,
+    INSTANCE_CLASS,
+    INSTANCE_SEGMENT,
+    SAMPLE_CLASS,
+    STANDARD_FEATURES,
+)
 from .errors import ValidationFailure
 from .ir import DatasetIR
 from .scanner import SamplePaths
@@ -100,6 +107,7 @@ class ExporterRunResult:
 
 class BaseExtractor(Generic[TOptions], ABC):
     OptionsModel: ClassVar[type[PluginOptions]] = PluginOptions
+    produced_features: ClassVar[frozenset[str]] = frozenset()
 
     def __init__(self, opts: TOptions) -> None:
         self.opts = opts
@@ -111,6 +119,7 @@ class BaseExtractor(Generic[TOptions], ABC):
 
 class BaseExporter(Generic[TOptions], ABC):
     OptionsModel: ClassVar[type[PluginOptions]] = PluginOptions
+    required_features: ClassVar[frozenset[str]] = frozenset()
 
     def __init__(self, opts: TOptions) -> None:
         self.opts = opts
@@ -120,3 +129,18 @@ class BaseExporter(Generic[TOptions], ABC):
         self, ctx: ExportContext
     ) -> ExporterRunResult | dict[str, Any]:
         raise NotImplementedError
+
+
+__all__ = [
+    "BaseExporter",
+    "BaseExtractor",
+    "ExportContext",
+    "ExporterRunResult",
+    "ExtractionContext",
+    "INSTANCE_BBOX",
+    "INSTANCE_CLASS",
+    "INSTANCE_SEGMENT",
+    "PluginOptions",
+    "SAMPLE_CLASS",
+    "STANDARD_FEATURES",
+]

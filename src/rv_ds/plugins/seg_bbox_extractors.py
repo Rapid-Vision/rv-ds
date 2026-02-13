@@ -2,6 +2,7 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
+from ..contracts import INSTANCE_BBOX, INSTANCE_CLASS, INSTANCE_SEGMENT
 from ..filters import (
     object_passes_target_tags,
     passes_min_counts,
@@ -221,14 +222,17 @@ class DefaultExtractor(BaseExtractor[DefaultExtractorOptions]):
 
 class DefaultSegmentExtractor(DefaultExtractor):
     MODE: TaskMode = "segment"
+    produced_features = frozenset({INSTANCE_CLASS, INSTANCE_SEGMENT})
 
 
 class DefaultDetectionExtractor(DefaultExtractor):
     MODE: TaskMode = "detect"
+    produced_features = frozenset({INSTANCE_CLASS, INSTANCE_BBOX})
 
 
 class DefaultBothExtractor(DefaultExtractor):
     MODE: TaskMode = "both"
+    produced_features = frozenset({INSTANCE_CLASS, INSTANCE_SEGMENT, INSTANCE_BBOX})
 
 
 def _resolve_class(

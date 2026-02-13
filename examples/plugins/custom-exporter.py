@@ -1,7 +1,13 @@
 import json
 from pathlib import Path
 
-from rv_ds.plugin_api import BaseExporter, ExporterRunResult, PluginOptions
+from rv_ds.plugin_api import (
+    INSTANCE_BBOX,
+    INSTANCE_CLASS,
+    BaseExporter,
+    ExporterRunResult,
+    PluginOptions,
+)
 
 
 class ExporterOptions(PluginOptions):
@@ -10,6 +16,7 @@ class ExporterOptions(PluginOptions):
 
 class ExporterPlugin(BaseExporter[ExporterOptions]):
     OptionsModel = ExporterOptions
+    required_features = frozenset({INSTANCE_CLASS, INSTANCE_BBOX})
 
     def __init__(self, opts: ExporterOptions) -> None:
         super().__init__(opts)

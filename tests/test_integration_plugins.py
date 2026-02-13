@@ -54,6 +54,7 @@ class ExtractorOptions(PluginOptions):
 
 class ExtractorPlugin(BaseExtractor):
     OptionsModel = ExtractorOptions
+    produced_features = frozenset({"instance_class", "instance_bbox"})
 
     def __init__(self, opts: ExtractorOptions):
         super().__init__(opts)
@@ -123,6 +124,7 @@ class ExporterOptions(PluginOptions):
 
 class ExporterPlugin(BaseExporter):
     OptionsModel = ExporterOptions
+    required_features = frozenset({"instance_class"})
 
     def __init__(self, opts: ExporterOptions):
         super().__init__(opts)
@@ -156,7 +158,7 @@ def test_builtin_extractor_and_exporter(tmp_path: Path) -> None:
         dataset_dir=dataset_dir,
         output_dir=tmp_path / "exports",
         image_file="Image.png",
-        extractor_spec="default-seg",
+        extractor_spec="default-seg-bbox",
         extractor_opts={
             "class_mapping": [{"class": "sphere", "required_tags": ["sphere"]}],
             "target_tags": ["sphere"],

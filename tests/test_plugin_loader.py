@@ -37,6 +37,7 @@ class ExtractorOptions(PluginOptions):
 
 class ExtractorPlugin(BaseExtractor):
     OptionsModel = ExtractorOptions
+    produced_features = frozenset({"instance_class"})
 
     def __init__(self, opts: ExtractorOptions):
         super().__init__(opts)
@@ -71,6 +72,7 @@ from rv_ds.plugin_api import BaseExtractor
 
 class ExtractorPlugin(BaseExtractor):
     OptionsModel = object
+    produced_features = frozenset({"instance_class"})
 
     def extract_dataset(self, ctx):
         return None

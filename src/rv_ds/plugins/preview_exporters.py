@@ -3,6 +3,7 @@ from pathlib import Path
 
 import cv2
 
+from ..contracts import INSTANCE_BBOX, INSTANCE_CLASS, INSTANCE_SEGMENT
 from ..plugin_api import BaseExporter, ExportContext, ExporterRunResult, PluginOptions
 from .utils import class_color, class_label, draw_bbox, draw_polygon
 
@@ -116,6 +117,7 @@ class DefaultPreviewBBoxExporter(
     _PreviewOverlayBase, BaseExporter[DefaultPreviewBBoxExporterOptions]
 ):
     OptionsModel = DefaultPreviewBBoxExporterOptions
+    required_features = frozenset({INSTANCE_CLASS, INSTANCE_BBOX})
     mode = "bbox"
 
     def __init__(self, opts: DefaultPreviewBBoxExporterOptions) -> None:
@@ -130,6 +132,7 @@ class DefaultPreviewSegExporter(
     _PreviewOverlayBase, BaseExporter[DefaultPreviewSegExporterOptions]
 ):
     OptionsModel = DefaultPreviewSegExporterOptions
+    required_features = frozenset({INSTANCE_CLASS, INSTANCE_SEGMENT})
     mode = "seg"
     fallback_to_bbox = True
 

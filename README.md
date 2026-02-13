@@ -15,7 +15,7 @@ uv sync --dev
 
 ```bash
 uv run rv-ds export <dataset_dir> \
-  --extractor default-seg \
+  --extractor default-seg-bbox \
   --extractor-opts ./examples/opts/extractor.default-seg.json \
   --exporter default-yolo-seg \
   --exporter-opts ./examples/opts/exporter.default-yolo-seg.json
@@ -85,6 +85,12 @@ Matching rules:
 <dataset_dir>/<sample_uuid>/<image-file>
 ```
 
+## Data Model Terminology
+
+- `Dataset`: the whole export run payload.
+- `Sample`: one scene/image item in a dataset.
+- `Instance`: one object annotation in a sample.
+
 ## Output shape (default YOLO)
 
 ```text
@@ -110,7 +116,12 @@ Matching rules:
 Extractor plugin file must expose:
 
 ```python
-from rv_ds.plugin_api import BaseExtractor, PluginOptions
+from rv_ds.plugin_api import (
+    INSTANCE_BBOX,
+    INSTANCE_CLASS,
+    BaseExtractor,
+    PluginOptions,
+)
 
 
 class ExtractorOptions(PluginOptions):
@@ -119,6 +130,7 @@ class ExtractorOptions(PluginOptions):
 
 class ExtractorPlugin(BaseExtractor):
     OptionsModel = ExtractorOptions
+    produced_features = frozenset({INSTANCE_CLASS, INSTANCE_BBOX})
 
     def __init__(self, opts: ExtractorOptions):
         super().__init__(opts)
@@ -131,7 +143,12 @@ class ExtractorPlugin(BaseExtractor):
 Exporter plugin file must expose:
 
 ```python
-from rv_ds.plugin_api import BaseExporter, PluginOptions
+from rv_ds.plugin_api import (
+    INSTANCE_BBOX,
+    INSTANCE_CLASS,
+    BaseExporter,
+    PluginOptions,
+)
 
 
 class ExporterOptions(PluginOptions):
@@ -140,6 +157,7 @@ class ExporterOptions(PluginOptions):
 
 class ExporterPlugin(BaseExporter):
     OptionsModel = ExporterOptions
+    required_features = frozenset({INSTANCE_CLASS, INSTANCE_BBOX})
 
     def __init__(self, opts: ExporterOptions):
         super().__init__(opts)
@@ -148,6 +166,30 @@ class ExporterPlugin(BaseExporter):
     def export_dataset(self, ctx):
         ...
 ```
+
+## Feature Contracts
+
+Extractor and exporter compatibility is checked before extraction starts:
+
+`exporter.required_features` must be a subset of `extractor.produced_features`.
+
+If something is missing, `rv-ds` fails fast with an error listing missing features.
+
+### Standard Features
+
+- `sample_class`
+- `instance_class`
+- `instance_segment`
+- `instance_bbox`
+
+### Custom Features
+
+Custom features must use the `custom:` prefix (for example, `custom:instance_bbox_6d`).
+
+Use existing IR extension fields for payload:
+- dataset-level: `dataset.meta["custom:<feature>"]`
+- sample-level: `sample.extra["custom:<feature>"]`
+- instance-level: `instance.extra["custom:<feature>"]`
 
 See examples:
 - `/Users/mishapankin/Work/RapidVision/rv-ds/examples/plugins/custom-extractor.py`

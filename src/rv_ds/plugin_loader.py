@@ -6,6 +6,7 @@ from typing import Any, Literal, TypeAlias, TypeVar, cast
 
 from pydantic import ValidationError
 
+from .contracts import validate_feature_name
 from .errors import ValidationFailure
 from .plugin_api import BaseExporter, BaseExtractor, PluginOptions
 from .plugins.preview_exporters import (
@@ -111,6 +112,8 @@ def _instantiate_plugin(
     plugin_type: str,
     plugin_name: str,
 ) -> TPlugin:
+    _validate_plugin_contract_declaration(plugin_class, plugin_type, plugin_name)
+
     options_model = plugin_class.OptionsModel
     if not issubclass(options_model, PluginOptions):
         raise ValidationFailure(
@@ -136,6 +139,29 @@ def _instantiate_plugin(
         )
 
     return cast(TPlugin, plugin)
+
+
+def _validate_plugin_contract_declaration(
+    plugin_class: type[TPlugin],
+    plugin_type: str,
+    plugin_name: str,
+) -> None:
+    if plugin_type == "extractor":
+        extractor_class = cast(type[ExtractorType], plugin_class)
+        declared = extractor_class.produced_features
+        field = "produced_features"
+    else:
+        exporter_class = cast(type[ExporterType], plugin_class)
+        declared = exporter_class.required_features
+        field = "required_features"
+
+    if not isinstance(declared, frozenset) or not declared:
+        raise ValidationFailure(
+            f"{plugin_type} plugin '{plugin_name}' must declare non-empty {field}"
+        )
+
+    for feature in sorted(declared):
+        validate_feature_name(feature)
 
 
 def _load_module_from_path(spec: str) -> ModuleType:
