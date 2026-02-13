@@ -2,23 +2,23 @@ from typing import Any, Literal
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
-from ..contracts import INSTANCE_BBOX, INSTANCE_CLASS, INSTANCE_SEGMENT
-from ..filters import (
+from ...contracts import INSTANCE_BBOX, INSTANCE_CLASS, INSTANCE_SEGMENT
+from ...filters import (
     object_passes_target_tags,
     passes_min_counts,
     scene_passes_filters,
 )
-from ..ir import InstanceRecord, SampleRecord
-from ..mask_ops import object_mask, read_index_map
-from ..models import SceneObject, load_scene_meta
-from ..plugin_api import (
+from ...ir import InstanceRecord, SampleRecord
+from ...mask_ops import object_mask, read_index_map
+from ...models import SceneObject, load_scene_meta
+from ...plugin_api import (
     BaseExtractor,
     ExtractionContext,
     ExtractorDatasetInfo,
     PluginOptions,
 )
-from ..scanner import SamplePaths
-from ..sdk import extract_bbox, extract_largest_polygon, normalize_bbox
+from ...scanner import SamplePaths
+from ...sdk import extract_bbox, extract_largest_polygon, normalize_bbox
 
 TaskMode = Literal["detect", "segment", "both"]
 

@@ -4,8 +4,8 @@ from pathlib import Path
 import cv2
 from pydantic import Field
 
-from ..contracts import INSTANCE_BBOX, INSTANCE_CLASS, INSTANCE_SEGMENT
-from ..plugin_api import BaseExporter, ExportContext, ExporterRunResult, PluginOptions
+from ...contracts import INSTANCE_BBOX, INSTANCE_CLASS, INSTANCE_SEGMENT
+from ...plugin_api import BaseExporter, ExportContext, ExporterRunResult, PluginOptions
 from .utils import class_color, class_label, draw_bbox, draw_polygon
 
 
@@ -43,7 +43,10 @@ class _PreviewOverlayBase(BaseExporter[_PreviewBaseOptions]):
             else ctx.iter_samples(order="random")
         )
         for sample in stream:
-            if self.opts.max_samples is not None and exported_samples >= self.opts.max_samples:
+            if (
+                self.opts.max_samples is not None
+                and exported_samples >= self.opts.max_samples
+            ):
                 break
 
             source = sample.image_src_path

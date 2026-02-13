@@ -9,17 +9,17 @@ from pydantic import ValidationError
 from .contracts import validate_feature_name
 from .errors import ValidationFailure
 from .plugin_api import BaseExporter, BaseExtractor, PluginOptions
-from .plugins.preview_exporters import (
+from .plugins.exporters.preview import (
     DefaultPreviewBBoxExporter,
     DefaultPreviewSegExporter,
 )
-from .plugins.seg_bbox_extractors import (
+from .plugins.exporters.yolo import (
+    DefaultYoloExporter,
+)
+from .plugins.extractors.seg_bbox import (
     DefaultBothExtractor,
     DefaultDetectionExtractor,
     DefaultSegmentExtractor,
-)
-from .plugins.yolo_exporters import (
-    DefaultYoloExporter,
 )
 
 ExtractorType: TypeAlias = BaseExtractor[Any]
