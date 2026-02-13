@@ -1,26 +1,20 @@
-from pathlib import Path
-
+from rv_ds.errors import ValidationFailure
 from rv_ds.ir import DatasetIR, InstanceRecord, SampleRecord
 from rv_ds.plugin_api import BaseExtractor, PluginOptions
 from rv_ds.sdk import (
     extract_bbox,
-    extract_largest_polygon,
     load_scene_meta,
     normalize_bbox,
     object_mask,
-    parse_classes_file,
     read_index_map,
-    resolve_class_from_tags,
 )
 
 
 class ExtractorOptions(PluginOptions):
-    classes_file: Path
-    target_tags: list[str] = []
-    mode: str = "segment"
+    tags: list[str]
 
 
-class ExtractorPlugin(BaseExtractor):
+class ExtractorPlugin(BaseExtractor[ExtractorOptions]):
     OptionsModel = ExtractorOptions
 
     def __init__(self, opts: ExtractorOptions) -> None:
@@ -28,47 +22,50 @@ class ExtractorPlugin(BaseExtractor):
         self.opts = opts
 
     def extract_dataset(self, ctx):
-        classes = parse_classes_file(self.opts.classes_file)
-        target_tags = set(self.opts.target_tags)
-        mode = self.opts.mode
+        class_names = self.opts.tags
+        class_to_id = {name: idx for idx, name in enumerate(class_names)}
 
         samples = []
         for sample in ctx.samples:
             scene = load_scene_meta(sample.meta_path)
             index_map = read_index_map(sample.index_path)
-            sample_instances = []
+            instances = []
 
             for obj in scene.objects:
-                if target_tags and not (set(obj.tags) & target_tags):
+                if not obj.tags:
                     continue
+                if len(obj.tags) > 1:
+                    raise ValidationFailure(
+                        f"sample '{sample.sample_id}' object index={obj.index} has multiple tags; "
+                        "this simple extractor expects exactly one tag per object"
+                    )
 
-                class_name, class_id = resolve_class_from_tags(list(obj.tags), classes)
+                tag = obj.tags[0]
+                class_id = class_to_id.get(tag)
                 if class_id is None:
                     continue
 
                 mask = object_mask(index_map, obj.index)
-                bbox = extract_bbox(mask)
-                poly = (
-                    extract_largest_polygon(mask)
-                    if mode in ("segment", "both")
-                    else None
-                )
-                norm_bbox = (
-                    normalize_bbox(bbox, index_map.shape[1], index_map.shape[0])
-                    if bbox is not None
-                    else None
+                bbox_xyxy = extract_bbox(mask)
+                if bbox_xyxy is None:
+                    continue
+
+                bbox_norm = normalize_bbox(
+                    bbox_xyxy,
+                    width=index_map.shape[1],
+                    height=index_map.shape[0],
                 )
 
-                sample_instances.append(
+                instances.append(
                     InstanceRecord(
                         sample_id=sample.sample_id,
                         object_index=obj.index,
-                        class_name=class_name,
+                        class_name=tag,
                         class_id=class_id,
-                        object_tags=list(obj.tags),
-                        bbox_xyxy=bbox,
-                        bbox_norm_cxcywh=norm_bbox,
-                        polygon_norm=poly,
+                        object_tags=[tag],
+                        bbox_xyxy=bbox_xyxy,
+                        bbox_norm_cxcywh=bbox_norm,
+                        polygon_norm=None,
                         area_px=int(mask.sum()),
                         extra={},
                     )
@@ -82,9 +79,11 @@ class ExtractorPlugin(BaseExtractor):
                     image_out_name=f"{sample.sample_id}.png",
                     width=index_map.shape[1],
                     height=index_map.shape[0],
-                    instances=sample_instances,
+                    instances=instances,
                     extra={},
                 )
             )
 
-        return DatasetIR(samples=samples, class_names=classes, meta={"custom": True})
+        return DatasetIR(
+            samples=samples, class_names=class_names, meta={"custom": True}
+        )

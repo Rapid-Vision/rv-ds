@@ -157,9 +157,9 @@ Import from `rv_ds.sdk`:
 Custom extractor + built-in YOLO exporter:
 
 ```bash
-uv run rv-ds export ./4 \
+uv run rv-ds export ./examples/dataset \
   --extractor ./examples/plugins/custom-extractor.py \
-  --extractor-opts ./examples/opts/extractor.default-segment.json \
+  --extractor-opts ./examples/opts/extractor.custom-simple.json \
   --exporter default-yolo \
   --exporter-opts ./examples/opts/exporter.default-yolo.json
 ```
@@ -167,12 +167,22 @@ uv run rv-ds export ./4 \
 Built-in extractor + custom exporter:
 
 ```bash
-uv run rv-ds export ./4 \
+uv run rv-ds export ./examples/dataset \
   --extractor default-detection \
   --extractor-opts ./examples/opts/extractor.default-segment.json \
   --exporter ./examples/plugins/custom-exporter.py \
-  --exporter-opts ./examples/opts/exporter.default-yolo.json
+  --exporter-opts ./examples/opts/exporter.custom-simple.json
 ```
+
+Custom extractor + custom exporter:
+```bash
+uv run rv-ds export ./examples/dataset \
+  --extractor ./examples/plugins/custom-extractor.py \
+  --extractor-opts ./examples/opts/extractor.custom-simple.json \
+  --exporter ./examples/plugins/custom-exporter.py \
+  --exporter-opts ./examples/opts/exporter.custom-simple.json
+```
+
 
 ## Development checks
 
