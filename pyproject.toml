@@ -1,0 +1,19 @@
+[project]
+name = "rv-export"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Mikhail Pankin", email = "mishapankin@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "opencv-python>=4.13.0.92",
+]
+
+[project.scripts]
+rv-export = "rv_export:main"
+
+[build-system]
+requires = ["uv_build>=0.10.2,<0.11.0"]
+build-backend = "uv_build"
