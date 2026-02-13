@@ -28,7 +28,9 @@ class ExporterPlugin(BaseExporter):
                 if inst.class_id is None:
                     continue
                 if inst.bbox_norm_cxcywh is not None:
-                    lines.append(format_detect_line(inst.class_id, inst.bbox_norm_cxcywh))
+                    lines.append(
+                        format_detect_line(inst.class_id, inst.bbox_norm_cxcywh)
+                    )
                 if inst.polygon_norm:
                     lines.append(format_segment_line(inst.class_id, inst.polygon_norm))
 

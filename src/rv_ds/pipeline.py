@@ -42,7 +42,7 @@ class ExportResult:
 class PreparedContexts:
     samples: list[SamplePaths]
     export_dir: Path
-    extractor: BaseExtractor
+    extractor: BaseExtractor[Any]
     extractor_info: Any
     extraction_ctx: ExtractionContext
     exporter_opts: dict[str, Any]

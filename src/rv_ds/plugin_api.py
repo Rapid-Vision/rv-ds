@@ -2,7 +2,7 @@ import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
@@ -13,6 +13,9 @@ from .scanner import SamplePaths
 
 class PluginOptions(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+
+
+TOptions = TypeVar("TOptions", bound=PluginOptions)
 
 
 @dataclass
@@ -95,10 +98,10 @@ class ExporterRunResult:
     meta: dict[str, Any] = field(default_factory=dict)
 
 
-class BaseExtractor(ABC):
+class BaseExtractor(Generic[TOptions], ABC):
     OptionsModel: ClassVar[type[PluginOptions]] = PluginOptions
 
-    def __init__(self, opts: PluginOptions) -> None:
+    def __init__(self, opts: TOptions) -> None:
         self.opts = opts
 
     @abstractmethod
@@ -106,10 +109,10 @@ class BaseExtractor(ABC):
         raise NotImplementedError
 
 
-class BaseExporter(ABC):
+class BaseExporter(Generic[TOptions], ABC):
     OptionsModel: ClassVar[type[PluginOptions]] = PluginOptions
 
-    def __init__(self, opts: PluginOptions) -> None:
+    def __init__(self, opts: TOptions) -> None:
         self.opts = opts
 
     @abstractmethod

@@ -2,7 +2,7 @@ import importlib.util
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Literal, TypeVar, cast
+from typing import Any, Literal, TypeAlias, TypeVar, cast
 
 from pydantic import ValidationError
 
@@ -15,7 +15,11 @@ from .plugins.extractors import (
     DefaultSegmentExtractor,
 )
 
-TPlugin = TypeVar("TPlugin", bound=BaseExtractor | BaseExporter)
+ExtractorType: TypeAlias = BaseExtractor[Any]
+ExporterType: TypeAlias = BaseExporter[Any]
+PluginType: TypeAlias = ExtractorType | ExporterType
+
+TPlugin = TypeVar("TPlugin", bound=PluginType)
 PluginKind = Literal["extractor", "exporter"]
 
 
@@ -25,39 +29,43 @@ class LoadedPlugin:
     source: str
 
 
-BUILTIN_EXTRACTORS: dict[str, type[BaseExtractor]] = {
+BUILTIN_EXTRACTORS: dict[str, type[ExtractorType]] = {
     "default-segment": DefaultSegmentExtractor,
     "default-detection": DefaultDetectionExtractor,
     "default-both": DefaultBothExtractor,
 }
 
-BUILTIN_EXPORTERS: dict[str, type[BaseExporter]] = {
+BUILTIN_EXPORTERS: dict[str, type[ExporterType]] = {
     "default-yolo": DefaultYoloExporter,
 }
 
 
-def load_extractor(spec: str, opts: dict[str, Any]) -> tuple[BaseExtractor, LoadedPlugin]:
+def load_extractor(
+    spec: str, opts: dict[str, Any]
+) -> tuple[ExtractorType, LoadedPlugin]:
     plugin, loaded = _load_plugin(
         kind="extractor",
         spec=spec,
         opts=opts,
         builtin_registry=BUILTIN_EXTRACTORS,
         plugin_symbol="ExtractorPlugin",
-        expected_base=BaseExtractor,
+        expected_base=cast(type[ExtractorType], BaseExtractor),
     )
-    return cast(BaseExtractor, plugin), loaded
+    return plugin, loaded
 
 
-def load_exporter(spec: str, opts: dict[str, Any]) -> tuple[BaseExporter, LoadedPlugin]:
+def load_exporter(
+    spec: str, opts: dict[str, Any]
+) -> tuple[ExporterType, LoadedPlugin]:
     plugin, loaded = _load_plugin(
         kind="exporter",
         spec=spec,
         opts=opts,
         builtin_registry=BUILTIN_EXPORTERS,
         plugin_symbol="ExporterPlugin",
-        expected_base=BaseExporter,
+        expected_base=cast(type[ExporterType], BaseExporter),
     )
-    return cast(BaseExporter, plugin), loaded
+    return plugin, loaded
 
 
 def _load_plugin(
@@ -98,7 +106,8 @@ def _instantiate_plugin(
     options_model = plugin_class.OptionsModel
     if not issubclass(options_model, PluginOptions):
         raise ValidationFailure(
-            f"{plugin_type} plugin '{plugin_name}' has invalid OptionsModel; must inherit PluginOptions"
+            f"{plugin_type} plugin '{plugin_name}' has invalid OptionsModel; "
+            "must inherit PluginOptions"
         )
 
     try:
@@ -163,4 +172,4 @@ def _load_plugin_class(
             f"plugin '{module.__name__}' class '{symbol}' must inherit {base_name}"
         )
 
-    return cast(type[TPlugin], candidate)
+    return candidate

@@ -116,7 +116,7 @@ class DefaultExtractorOptions(PluginOptions):
         return self
 
 
-class DefaultExtractor(BaseExtractor):
+class DefaultExtractor(BaseExtractor[DefaultExtractorOptions]):
     OptionsModel = DefaultExtractorOptions
     MODE: TaskMode = "segment"
 

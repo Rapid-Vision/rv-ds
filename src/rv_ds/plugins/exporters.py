@@ -8,7 +8,7 @@ class DefaultYoloExporterOptions(PluginOptions):
     include_empty: bool = False
 
 
-class DefaultYoloExporter(BaseExporter):
+class DefaultYoloExporter(BaseExporter[DefaultYoloExporterOptions]):
     OptionsModel = DefaultYoloExporterOptions
 
     def __init__(self, opts: DefaultYoloExporterOptions) -> None:
