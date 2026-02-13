@@ -264,10 +264,15 @@ def _validate_export_outputs(
     root = export_dir.resolve()
 
     for output_str in export_result.outputs:
-        output_path = Path(output_str).resolve()
-        if output_path != root and root not in output_path.parents:
+        output_path = Path(output_str)
+        resolved_output = (
+            output_path.resolve()
+            if output_path.is_absolute()
+            else (root / output_path).resolve()
+        )
+        if resolved_output != root and root not in resolved_output.parents:
             raise ValidationFailure(
-                f"exporter reported output outside export directory: '{output_path}'"
+                f"exporter reported output outside export directory: '{resolved_output}'"
             )
 
     for safe_path in ctx.outputs:
