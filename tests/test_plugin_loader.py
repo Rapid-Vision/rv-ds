@@ -27,10 +27,17 @@ def test_load_path_extractor_plugin(tmp_path: Path) -> None:
     plugin = tmp_path / "extractor.py"
     plugin.write_text(
         """
-def build_extractor(opts):
+from rv_ds.plugin_api import PluginOptions
+
+
+class ExtractorOptions(PluginOptions):
+    dataset: object
+
+
+def build_extractor(opts: ExtractorOptions):
     class P:
         def extract_dataset(self, ctx):
-            return opts[\"dataset\"]
+            return opts.dataset
     return P()
 """,
         encoding="utf-8",
@@ -48,3 +55,20 @@ def test_missing_builder_raises(tmp_path: Path) -> None:
 
     with pytest.raises(ValidationFailure):
         load_exporter(str(plugin), {})
+
+
+def test_missing_options_model_raises(tmp_path: Path) -> None:
+    plugin = tmp_path / "extractor_no_model.py"
+    plugin.write_text(
+        """
+def build_extractor(opts):
+    class P:
+        def extract_dataset(self, ctx):
+            return None
+    return P()
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationFailure):
+        load_extractor(str(plugin), {})

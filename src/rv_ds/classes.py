@@ -1,19 +1,6 @@
 from pathlib import Path
 
 from .errors import ValidationFailure
-from .models import SceneObject
-
-
-class ClassResolver:
-    def __init__(self, class_names: list[str]) -> None:
-        self.class_names = class_names
-        self._class_to_id = {name: idx for idx, name in enumerate(class_names)}
-
-    def resolve_object_class(self, obj: SceneObject) -> int | None:
-        for class_name in self.class_names:
-            if class_name in obj.tags:
-                return self._class_to_id[class_name]
-        return None
 
 
 def parse_classes_file(path: Path) -> list[str]:

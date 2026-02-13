@@ -14,7 +14,7 @@
 - `uv build`: build source/wheel distributions using `uv_build` backend.
 
 ## Coding Style & Naming Conventions
-- Target Python `>=3.12`; keep compatibility with this baseline.
+- Target Python `>=3.12`; keep compatibility with this baseline. Do not required by older versions like `from __future__ import annotations`
 - Follow PEP 8: 4-space indentation, snake_case for functions/modules, CapWords for classes, UPPER_CASE for constants.
 - Keep CLI-related code in `cli.py`; move reusable logic into additional modules under `src/rv_ds/` as complexity grows.
 - Prefer small, single-purpose functions with explicit argument names.

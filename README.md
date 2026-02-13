@@ -97,7 +97,14 @@ Matching rules:
 Extractor plugin file must expose:
 
 ```python
-def build_extractor(opts: dict):
+from rv_ds.plugin_api import PluginOptions
+
+
+class ExtractorOptions(PluginOptions):
+    ...
+
+
+def build_extractor(opts: ExtractorOptions):
     class ExtractorImpl:
         def extract_dataset(self, ctx):
             ...
@@ -107,7 +114,14 @@ def build_extractor(opts: dict):
 Exporter plugin file must expose:
 
 ```python
-def build_exporter(opts: dict):
+from rv_ds.plugin_api import PluginOptions
+
+
+class ExporterOptions(PluginOptions):
+    ...
+
+
+def build_exporter(opts: ExporterOptions):
     class ExporterImpl:
         def export_dataset(self, ctx):
             ...

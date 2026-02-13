@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from rv_ds.ir import DatasetIR, InstanceRecord, SampleRecord
+from rv_ds.plugin_api import PluginOptions
 from rv_ds.sdk import (
     extract_bbox,
     extract_largest_polygon,
@@ -11,10 +14,16 @@ from rv_ds.sdk import (
 )
 
 
-def build_extractor(opts: dict):
-    classes = parse_classes_file(opts["classes_file"])
-    target_tags = set(opts.get("target_tags", []))
-    mode = opts.get("mode", "segment")
+class ExtractorOptions(PluginOptions):
+    classes_file: Path
+    target_tags: list[str] = []
+    mode: str = "segment"
+
+
+def build_extractor(opts: ExtractorOptions):
+    classes = parse_classes_file(opts.classes_file)
+    target_tags = set(opts.target_tags)
+    mode = opts.mode
 
     class ExtractorImpl:
         def extract_dataset(self, ctx):
@@ -75,8 +84,6 @@ def build_extractor(opts: dict):
                     )
                 )
 
-            return DatasetIR(
-                samples=samples, class_names=classes, meta={"custom": True}
-            )
+            return DatasetIR(samples=samples, class_names=classes, meta={"custom": True})
 
     return ExtractorImpl()

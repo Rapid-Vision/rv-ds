@@ -3,9 +3,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from pydantic import BaseModel, ConfigDict
+
 from .errors import ValidationFailure
 from .ir import DatasetIR
 from .scanner import SamplePaths
+
+
+class PluginOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 @dataclass

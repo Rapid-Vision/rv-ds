@@ -65,10 +65,10 @@ def run_export(config: ExportConfig) -> ExportResult:
 
     framework_opts_extractor = _read_framework_opts(config.extractor_opts)
     framework_opts_exporter = _read_framework_opts(config.exporter_opts)
+    extractor_opts = _strip_framework_opts(config.extractor_opts)
+    exporter_opts = _strip_framework_opts(config.exporter_opts)
 
-    extractor, extractor_info = load_extractor(
-        config.extractor_spec, config.extractor_opts
-    )
+    extractor, extractor_info = load_extractor(config.extractor_spec, extractor_opts)
     extraction_ctx = ExtractionContext(
         dataset_dir=config.dataset_dir,
         image_file=config.image_file,
@@ -102,7 +102,7 @@ def run_export(config: ExportConfig) -> ExportResult:
             json.dumps(dataset.to_dict(), indent=2), encoding="utf-8"
         )
 
-    exporter, exporter_info = load_exporter(config.exporter_spec, config.exporter_opts)
+    exporter, exporter_info = load_exporter(config.exporter_spec, exporter_opts)
     export_ctx = ExportContext(
         dataset=dataset,
         output_dir=export_dir,
@@ -154,6 +154,10 @@ def _read_framework_opts(opts: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValidationFailure("reserved options key '_framework' must be an object")
     return raw
+
+
+def _strip_framework_opts(opts: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in opts.items() if key != "_framework"}
 
 
 def _normalize_exporter_result(

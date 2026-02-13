@@ -1,15 +1,11 @@
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-from ..errors import ValidationFailure
-from ..plugin_api import ExportContext, Exporter, ExporterRunResult
+from ..plugin_api import ExportContext, Exporter, ExporterRunResult, PluginOptions
 from ..yolo import format_detect_line, format_segment_line, write_data_yaml
 
 
-@dataclass
-class DefaultYoloExporterOptions:
-    include_empty: bool
+class DefaultYoloExporterOptions(PluginOptions):
+    include_empty: bool = False
 
 
 class DefaultYoloExporter(Exporter):
@@ -61,8 +57,5 @@ class DefaultYoloExporter(Exporter):
         )
 
 
-def build_default_yolo_exporter(opts: dict[str, Any]) -> Exporter:
-    include_empty = opts.get("include_empty", False)
-    if not isinstance(include_empty, bool):
-        raise ValidationFailure("exporter option 'include_empty' must be boolean")
-    return DefaultYoloExporter(DefaultYoloExporterOptions(include_empty=include_empty))
+def build_default_yolo_exporter(opts: DefaultYoloExporterOptions) -> Exporter:
+    return DefaultYoloExporter(opts)

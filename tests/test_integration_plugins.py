@@ -44,9 +44,14 @@ from rv_ds.sdk import (
     object_mask,
     read_index_map,
 )
+from rv_ds.plugin_api import PluginOptions
 
 
-def build_extractor(opts):
+class ExtractorOptions(PluginOptions):
+    include_empty_samples: bool = True
+
+
+def build_extractor(opts: ExtractorOptions):
     class E:
         def extract_dataset(self, ctx):
             classes = ["sphere"]
@@ -76,18 +81,19 @@ def build_extractor(opts):
                         )
                     )
 
-                out.append(
-                    SampleRecord(
-                        sample_id=sample.sample_id,
-                        scene_tags=list(scene.tags),
-                        image_src_path=sample.image_path,
-                        image_out_name=f"{sample.sample_id}.png",
-                        width=idx.shape[1],
-                        height=idx.shape[0],
-                        instances=instances,
-                        extra={},
+                if instances or opts.include_empty_samples:
+                    out.append(
+                        SampleRecord(
+                            sample_id=sample.sample_id,
+                            scene_tags=list(scene.tags),
+                            image_src_path=sample.image_path,
+                            image_out_name=f"{sample.sample_id}.png",
+                            width=idx.shape[1],
+                            height=idx.shape[0],
+                            instances=instances,
+                            extra={},
+                        )
                     )
-                )
 
             return DatasetIR(samples=out, class_names=classes, meta={})
 
@@ -102,20 +108,28 @@ def _write_custom_exporter(path: Path) -> None:
         """
 from pathlib import Path
 
+from rv_ds.plugin_api import PluginOptions
 from rv_ds.plugin_api import ExporterRunResult
 
 
-def build_exporter(opts):
+class ExporterOptions(PluginOptions):
+    write_summary: bool = True
+
+
+def build_exporter(opts: ExporterOptions):
     class X:
         def export_dataset(self, ctx):
             ctx.mkdir(Path("images"))
-            summary = ctx.write_text(
-                Path("summary.txt"),
-                str(len(ctx.dataset.samples)),
-            )
+            outputs = []
+            if opts.write_summary:
+                summary = ctx.write_text(
+                    Path("summary.txt"),
+                    str(len(ctx.dataset.samples)),
+                )
+                outputs.append(str(summary))
             return ExporterRunResult(
                 stats={"samples": len(ctx.dataset.samples)},
-                outputs=[str(summary)],
+                outputs=outputs,
                 meta={},
             )
 

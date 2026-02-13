@@ -1,11 +1,15 @@
 from pathlib import Path
 
-from rv_ds.plugin_api import ExporterRunResult
+from rv_ds.plugin_api import ExporterRunResult, PluginOptions
 from rv_ds.yolo import format_detect_line, format_segment_line, write_data_yaml
 
 
-def build_exporter(opts: dict):
-    include_empty = bool(opts.get("include_empty", False))
+class ExporterOptions(PluginOptions):
+    include_empty: bool = False
+
+
+def build_exporter(opts: ExporterOptions):
+    include_empty = opts.include_empty
 
     class ExporterImpl:
         def export_dataset(self, ctx):
@@ -13,9 +17,7 @@ def build_exporter(opts: dict):
             labels_dir = ctx.mkdir(Path("labels"))
 
             for sample in ctx.dataset.samples:
-                ctx.copy_image(
-                    sample.image_src_path, images_dir / sample.image_out_name
-                )
+                ctx.copy_image(sample.image_src_path, images_dir / sample.image_out_name)
                 lines = []
                 for inst in sample.instances:
                     if inst.class_id is None:
