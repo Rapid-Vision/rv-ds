@@ -91,8 +91,8 @@ def run_export(config: ExportConfig) -> ExportResult:
 
     dataset.validate()
 
-    if extraction_ctx._warnings and config.fail_on_plugin_warning:
-        joined = " | ".join(extraction_ctx._warnings)
+    if extraction_ctx.warnings and config.fail_on_plugin_warning:
+        joined = " | ".join(extraction_ctx.warnings)
         raise ValidationFailure(
             f"extractor produced warnings and fail-on-warning is set: {joined}"
         )
@@ -119,8 +119,8 @@ def run_export(config: ExportConfig) -> ExportResult:
     export_result = _normalize_exporter_result(raw_export_result)
     _validate_export_outputs(export_dir, export_ctx, export_result)
 
-    if export_ctx._warnings and config.fail_on_plugin_warning:
-        joined = " | ".join(export_ctx._warnings)
+    if export_ctx.warnings and config.fail_on_plugin_warning:
+        joined = " | ".join(export_ctx.warnings)
         raise ValidationFailure(
             f"exporter produced warnings and fail-on-warning is set: {joined}"
         )
@@ -131,7 +131,7 @@ def run_export(config: ExportConfig) -> ExportResult:
         exporter_outputs=(
             len(export_result.outputs)
             if export_result.outputs
-            else len(export_ctx._outputs)
+            else len(export_ctx.outputs)
         ),
     )
 
@@ -141,8 +141,8 @@ def run_export(config: ExportConfig) -> ExportResult:
         stats=stats,
         extractor_info=extractor_info,
         exporter_info=exporter_info,
-        extraction_warnings=extraction_ctx._warnings,
-        export_warnings=export_ctx._warnings,
+        extraction_warnings=list(extraction_ctx.warnings),
+        export_warnings=list(export_ctx.warnings),
         exporter_result=export_result,
     )
 
@@ -212,7 +212,7 @@ def _validate_export_outputs(
                 f"exporter reported output outside export directory: '{output_path}'"
             )
 
-    for safe_path in ctx._outputs:
+    for safe_path in ctx.outputs:
         resolved = safe_path.resolve()
         if resolved != root and root not in resolved.parents:
             raise ValidationFailure(

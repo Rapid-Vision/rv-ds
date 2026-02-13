@@ -26,6 +26,10 @@ class ExtractionContext:
     def warn(self, message: str) -> None:
         self._warnings.append(message)
 
+    @property
+    def warnings(self) -> tuple[str, ...]:
+        return tuple(self._warnings)
+
 
 @dataclass
 class ExportContext:
@@ -37,6 +41,14 @@ class ExportContext:
 
     def warn(self, message: str) -> None:
         self._warnings.append(message)
+
+    @property
+    def warnings(self) -> tuple[str, ...]:
+        return tuple(self._warnings)
+
+    @property
+    def outputs(self) -> tuple[Path, ...]:
+        return tuple(sorted(self._outputs))
 
     def safe_path(self, path: Path) -> Path:
         candidate = (
@@ -60,13 +72,18 @@ class ExportContext:
         safe = self.safe_path(path)
         safe.parent.mkdir(parents=True, exist_ok=True)
         safe.write_text(content, encoding="utf-8")
-        self._outputs.add(safe)
+        self.add_output(safe)
         return safe
 
     def copy_image(self, src: Path, dst: Path) -> Path:
         safe = self.safe_path(dst)
         safe.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, safe)
+        self.add_output(safe)
+        return safe
+
+    def add_output(self, path: Path) -> Path:
+        safe = self.safe_path(path)
         self._outputs.add(safe)
         return safe
 

@@ -48,13 +48,13 @@ class DefaultYoloExporter(BaseExporter):
 
         data_yaml_path = ctx.safe_path(Path("data.yaml"))
         write_data_yaml(data_yaml_path, ctx.dataset.class_names)
-        ctx._outputs.add(data_yaml_path)
+        ctx.add_output(data_yaml_path)
 
         return ExporterRunResult(
             stats={
                 "exported_samples": exported_samples,
                 "empty_label_files": empty_label_files,
             },
-            outputs=[str(path) for path in sorted(ctx._outputs)],
+            outputs=[str(path) for path in ctx.outputs],
             meta={"exporter": "default-yolo"},
         )
