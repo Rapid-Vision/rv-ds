@@ -45,6 +45,8 @@ Builtin extractors:
 
 Builtin exporters:
 - `default-yolo`
+- `default-preview-bbox`
+- `default-preview-seg`
 
 ### Built-in extractor options (`class_mapping`)
 
@@ -89,6 +91,17 @@ Matching rules:
 <output>/<timestamp>/images/<sample_uuid>.png
 <output>/<timestamp>/labels/<sample_uuid>.txt
 <output>/<timestamp>/data.yaml
+<output>/<timestamp>/rv_ds_meta.json
+```
+
+## Output shape (preview exporters)
+
+`default-preview-bbox` and `default-preview-seg` write:
+
+```text
+<output>/<timestamp>/images/<sample_uuid>.png
+<output>/<timestamp>/overlays/<sample_uuid>.png
+<output>/<timestamp>/preview_meta.json
 <output>/<timestamp>/rv_ds_meta.json
 ```
 
@@ -172,6 +185,26 @@ uv run rv-ds export ./examples/dataset \
   --extractor-opts ./examples/opts/extractor.default-segment.json \
   --exporter ./examples/plugins/custom-exporter.py \
   --exporter-opts ./examples/opts/exporter.custom-simple.json
+```
+
+Built-in extractor + preview bbox exporter:
+
+```bash
+uv run rv-ds export ./examples/dataset \
+  --extractor default-detection \
+  --extractor-opts ./examples/opts/extractor.default-segment.json \
+  --exporter default-preview-bbox \
+  --exporter-opts '{}'
+```
+
+Built-in extractor + preview seg exporter:
+
+```bash
+uv run rv-ds export ./examples/dataset \
+  --extractor default-segment \
+  --extractor-opts ./examples/opts/extractor.default-segment.json \
+  --exporter default-preview-seg \
+  --exporter-opts '{}'
 ```
 
 Custom extractor + custom exporter:

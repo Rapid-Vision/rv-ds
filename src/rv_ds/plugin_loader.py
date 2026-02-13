@@ -8,7 +8,11 @@ from pydantic import ValidationError
 
 from .errors import ValidationFailure
 from .plugin_api import BaseExporter, BaseExtractor, PluginOptions
-from .plugins.exporters import DefaultYoloExporter
+from .plugins.exporters import (
+    DefaultPreviewBBoxExporter,
+    DefaultPreviewSegExporter,
+    DefaultYoloExporter,
+)
 from .plugins.extractors import (
     DefaultBothExtractor,
     DefaultDetectionExtractor,
@@ -37,6 +41,8 @@ BUILTIN_EXTRACTORS: dict[str, type[ExtractorType]] = {
 
 BUILTIN_EXPORTERS: dict[str, type[ExporterType]] = {
     "default-yolo": DefaultYoloExporter,
+    "default-preview-bbox": DefaultPreviewBBoxExporter,
+    "default-preview-seg": DefaultPreviewSegExporter,
 }
 
 

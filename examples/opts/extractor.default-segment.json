@@ -5,6 +5,12 @@
       "required_tags": [
         "sphere"
       ]
+    },
+    {
+      "class": "cube",
+      "required_tags": [
+        "cube"
+      ]
     }
   ],
   "target_tags": [],
