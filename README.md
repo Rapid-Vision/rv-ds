@@ -1,6 +1,9 @@
-# rv-export
+# rv-ds
 
-`rv-export` converts RV intermediate output folders into YOLO-formatted datasets without re-rendering.
+`rv-ds` is a two-stage export framework for RV intermediate datasets.
+
+1. **Extractor**: builds a standardized intermediate representation (IR) from RV samples.
+2. **Exporter**: writes IR to a target format (YOLO in v1 builtins).
 
 ## Install
 
@@ -11,23 +14,66 @@ uv sync --dev
 ## CLI
 
 ```bash
-uv run rv-export export <dataset_dir> \
-  --format yolo \
-  --classes ./classes.txt
+uv run rv-ds export <dataset_dir> \
+  --extractor default-segment \
+  --extractor-opts ./examples/opts/extractor.default-segment.json \
+  --exporter default-yolo \
+  --exporter-opts ./examples/opts/exporter.default-yolo.json
 ```
 
-### Supported flags
+### Command
 
-- `--format yolo` (required, only v1 format)
-- `--task detect|segment|both` (default: `both`)
-- `--classes <path>` (required, one class label per line)
-- `--output <dir>` (default: `./exports`)
-- `--image-file <name>` (default: `Image.png`)
-- `--target-tags <csv>`
-- `--min-count <tag=N>` (repeatable)
-- `--require-tags <csv>`
-- `--exclude-tags <csv>`
-- `--include-empty`
+`rv-ds export <dataset_dir>`
+
+Required flags:
+- `--extractor <builtin-or-plugin.py>`
+- `--exporter <builtin-or-plugin.py>`
+
+Optional flags:
+- `--extractor-opts <path.json>`
+- `--exporter-opts <path.json>`
+- `--output <dir>` default `./exports`
+- `--image-file <name>` default `Image.png`
+- `--fail-on-plugin-warning`
+- `--dump-ir`
+- `--debug`
+
+Builtin extractors:
+- `default-segment`
+- `default-detection`
+- `default-both`
+
+Builtin exporters:
+- `default-yolo`
+
+### Built-in extractor options (`class_mapping`)
+
+`default-segment`, `default-detection`, and `default-both` expect:
+
+```json
+{
+  "class_mapping": [
+    {
+      "class": "sphere",
+      "required_tags": ["sphere"]
+    },
+    {
+      "class": "animal",
+      "optional_tags": ["cat", "dog"]
+    }
+  ],
+  "min_count": {},
+  "require_tags": [],
+  "exclude_tags": [],
+  "include_empty": false,
+  "epsilon_ratio": 0.002
+}
+```
+
+Matching rules:
+- `required_tags`: object must contain all tags.
+- `optional_tags`: object must contain at least one tag.
+- Class IDs are the order in `class_mapping`.
 
 ## Input dataset shape
 
@@ -37,33 +83,74 @@ uv run rv-export export <dataset_dir> \
 <dataset_dir>/<sample_uuid>/<image-file>
 ```
 
-## Output shape
-
-Each run creates a timestamped folder inside `--output`:
+## Output shape (default YOLO)
 
 ```text
 <output>/<timestamp>/images/<sample_uuid>.png
 <output>/<timestamp>/labels/<sample_uuid>.txt
 <output>/<timestamp>/data.yaml
-<output>/<timestamp>/rv_export_meta.json
+<output>/<timestamp>/rv_ds_meta.json
 ```
 
-`data.yaml` contains:
+## Plugin API
 
-- `path: .`
-- `train: images`
-- `names: [...]`
+Extractor plugin file must expose:
 
-## Behavior notes
+```python
+def build_extractor(opts: dict):
+    class ExtractorImpl:
+        def extract_dataset(self, ctx):
+            ...
+    return ExtractorImpl()
+```
 
-- Class IDs are determined by the order in `--classes`.
-- Object class resolution uses first matching tag by class-file order.
-- Filtering order:
-  1. Scene `require-tags` / `exclude-tags`
-  2. Object selection (`target-tags` + class match)
-  3. `min-count` on selected objects
-  4. Empty-scene handling via `--include-empty`
-- `--task both` emits both detection and segmentation lines.
+Exporter plugin file must expose:
+
+```python
+def build_exporter(opts: dict):
+    class ExporterImpl:
+        def export_dataset(self, ctx):
+            ...
+    return ExporterImpl()
+```
+
+See examples:
+- `/Users/mishapankin/Work/RapidVision/rv-ds/examples/plugins/custom-extractor.py`
+- `/Users/mishapankin/Work/RapidVision/rv-ds/examples/plugins/custom-exporter.py`
+
+## Stable SDK helpers for custom plugins
+
+Import from `rv_ds.sdk`:
+- `read_index_map(path)`
+- `object_mask(index_map, object_index)`
+- `extract_bbox(mask)`
+- `normalize_bbox(bbox, width, height)`
+- `extract_largest_polygon(mask, epsilon_ratio=0.002)`
+- `load_scene_meta(path)`
+- `parse_classes_file(path)`
+- `resolve_class_from_tags(object_tags, class_names)`
+
+## Example custom combinations
+
+Custom extractor + built-in YOLO exporter:
+
+```bash
+uv run rv-ds export ./4 \
+  --extractor ./examples/plugins/custom-extractor.py \
+  --extractor-opts ./examples/opts/extractor.default-segment.json \
+  --exporter default-yolo \
+  --exporter-opts ./examples/opts/exporter.default-yolo.json
+```
+
+Built-in extractor + custom exporter:
+
+```bash
+uv run rv-ds export ./4 \
+  --extractor default-detection \
+  --extractor-opts ./examples/opts/extractor.default-segment.json \
+  --exporter ./examples/plugins/custom-exporter.py \
+  --exporter-opts ./examples/opts/exporter.default-yolo.json
+```
 
 ## Development checks
 

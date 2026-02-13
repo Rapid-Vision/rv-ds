@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 
 def format_detect_line(class_id: int, bbox: tuple[float, float, float, float]) -> str:

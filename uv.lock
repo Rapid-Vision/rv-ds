@@ -610,7 +610,7 @@ wheels = [
 ]
 
 [[package]]
-name = "rv-export"
+name = "rv-ds"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

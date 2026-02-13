@@ -1,22 +1,22 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- Source code lives in `src/rv_export/`.
-- CLI entrypoint is `src/rv_export/cli.py` (`main()`), re-exported by `src/rv_export/__init__.py`.
+- Source code lives in `src/rv_ds/`.
+- CLI entrypoint is `src/rv_ds/cli.py` (`main()`), re-exported by `src/rv_ds/__init__.py`.
 - Project metadata and dependencies are in `pyproject.toml`; lockfile is `uv.lock`.
 - Top-level docs are in `README.md`.
 - There is currently no `tests/` directory; add it at the repository root when introducing tests.
 
 ## Build, Test, and Development Commands
 - `uv sync`: create/update the local environment from `pyproject.toml` and `uv.lock`.
-- `uv run rv-export`: run the packaged CLI script defined in `[project.scripts]`.
-- `uv run python -m rv_export.cli`: run the CLI module directly during development.
+- `uv run rv-ds`: run the packaged CLI script defined in `[project.scripts]`.
+- `uv run python -m rv_ds.cli`: run the CLI module directly during development.
 - `uv build`: build source/wheel distributions using `uv_build` backend.
 
 ## Coding Style & Naming Conventions
 - Target Python `>=3.12`; keep compatibility with this baseline.
 - Follow PEP 8: 4-space indentation, snake_case for functions/modules, CapWords for classes, UPPER_CASE for constants.
-- Keep CLI-related code in `cli.py`; move reusable logic into additional modules under `src/rv_export/` as complexity grows.
+- Keep CLI-related code in `cli.py`; move reusable logic into additional modules under `src/rv_ds/` as complexity grows.
 - Prefer small, single-purpose functions with explicit argument names.
 
 ## Testing Guidelines

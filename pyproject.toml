@@ -1,11 +1,9 @@
 [project]
-name = "rv-export"
+name = "rv-ds"
 version = "0.1.0"
 description = "Export RV intermediate renders into YOLO datasets without re-rendering"
 readme = "README.md"
-authors = [
-    { name = "Mikhail Pankin", email = "mishapankin@gmail.com" }
-]
+authors = [{ name = "Mikhail Pankin", email = "mishapankin@gmail.com" }]
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",
@@ -15,15 +13,10 @@ dependencies = [
 ]
 
 [project.scripts]
-rv-export = "rv_export:main"
+rv-ds = "rv_ds:main"
 
 [dependency-groups]
-dev = [
-    "mypy>=1.10",
-    "pytest>=8.2",
-    "pytest-cov>=5.0",
-    "ruff>=0.5",
-]
+dev = ["mypy>=1.10", "pytest>=8.2", "pytest-cov>=5.0", "ruff>=0.5"]
 
 [build-system]
 requires = ["uv_build>=0.10.2,<0.11.0"]
@@ -45,5 +38,5 @@ python_version = "3.11"
 strict = true
 mypy_path = ["src"]
 warn_unused_configs = true
-packages = ["rv_export"]
+packages = ["rv_ds"]
 ignore_missing_imports = true

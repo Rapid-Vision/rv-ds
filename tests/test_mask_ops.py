@@ -3,7 +3,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from rv_export.mask_ops import object_mask, read_index_map
+from rv_ds.mask_ops import object_mask, read_index_map
 
 
 def test_read_index_map_u16(tmp_path: Path) -> None:

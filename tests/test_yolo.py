@@ -2,7 +2,7 @@ from pathlib import Path
 
 import yaml
 
-from rv_export.yolo import format_detect_line, format_segment_line, write_data_yaml
+from rv_ds.yolo import format_detect_line, format_segment_line, write_data_yaml
 
 
 def test_format_detect_line() -> None:

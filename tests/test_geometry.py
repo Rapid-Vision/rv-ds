@@ -1,6 +1,6 @@
 import numpy as np
 
-from rv_export.geometry import bbox_from_mask, largest_polygon_from_mask, normalize_bbox
+from rv_ds.geometry import bbox_from_mask, largest_polygon_from_mask, normalize_bbox
 
 
 def test_bbox_normalization() -> None:

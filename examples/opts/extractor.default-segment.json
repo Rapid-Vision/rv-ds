@@ -1,0 +1,16 @@
+{
+  "class_mapping": [
+    {
+      "class": "sphere",
+      "required_tags": [
+        "sphere"
+      ]
+    }
+  ],
+  "target_tags": [],
+  "min_count": {},
+  "require_tags": [],
+  "exclude_tags": [],
+  "include_empty": false,
+  "epsilon_ratio": 0.002
+}

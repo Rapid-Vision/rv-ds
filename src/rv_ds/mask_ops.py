@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import cast
 
 import cv2
 import numpy as np
@@ -27,7 +28,7 @@ def read_index_map(path: Path) -> np.ndarray:
             return lo | (hi << 8)
 
         if image.dtype == np.uint16 and image.shape[2] >= 1:
-            return image[:, :, 0]
+            return cast(np.ndarray, image[:, :, 0])
 
     raise ValidationFailure(
         f"unsupported IndexOB format for '{path}': shape={image.shape}, dtype={image.dtype}"
@@ -36,4 +37,4 @@ def read_index_map(path: Path) -> np.ndarray:
 
 def object_mask(index_map: np.ndarray, object_index: int) -> np.ndarray:
     mask = (index_map == object_index).astype(np.uint8)
-    return mask
+    return cast(np.ndarray, mask)
