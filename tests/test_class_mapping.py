@@ -15,7 +15,8 @@ def test_required_tags_matching() -> None:
         },
     )
 
-    assert hasattr(extractor, "extract_dataset")
+    assert hasattr(extractor, "describe_dataset")
+    assert hasattr(extractor, "extract_sample")
     assert info.source == "builtin"
 
 
@@ -30,7 +31,8 @@ def test_optional_tags_matching() -> None:
         },
     )
 
-    assert hasattr(extractor, "extract_dataset")
+    assert hasattr(extractor, "describe_dataset")
+    assert hasattr(extractor, "extract_sample")
     assert info.source == "builtin"
 
 

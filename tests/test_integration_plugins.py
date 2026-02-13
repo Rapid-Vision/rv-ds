@@ -38,6 +38,7 @@ def _write_custom_extractor(path: Path) -> None:
         """
 from rv_ds.ir import DatasetIR, InstanceRecord, SampleRecord
 from rv_ds.plugin_api import BaseExtractor
+from rv_ds.plugin_api import ExtractorDatasetInfo
 from rv_ds.sdk import (
     extract_bbox,
     load_scene_meta,
@@ -60,49 +61,47 @@ class ExtractorPlugin(BaseExtractor):
         super().__init__(opts)
         self.opts = opts
 
-    def extract_dataset(self, ctx):
-        classes = ["sphere"]
-        out = []
-        for sample in ctx.samples:
-            scene = load_scene_meta(sample.meta_path)
-            idx = read_index_map(sample.index_path)
-            instances = []
-            for obj in scene.objects:
-                if "sphere" not in obj.tags:
-                    continue
-                mask = object_mask(idx, obj.index)
-                bbox = extract_bbox(mask)
-                norm = normalize_bbox(bbox, idx.shape[1], idx.shape[0]) if bbox else None
-                instances.append(
-                    InstanceRecord(
-                        sample_id=sample.sample_id,
-                        object_index=obj.index,
-                        class_name="sphere",
-                        class_id=0,
-                        object_tags=list(obj.tags),
-                        bbox_xyxy=bbox,
-                        bbox_norm_cxcywh=norm,
-                        polygon_norm=None,
-                        area_px=int(mask.sum()),
-                        extra={},
-                    )
-                )
+    def describe_dataset(self, ctx):
+        return ExtractorDatasetInfo(class_names=["sphere"], meta={})
 
-            if instances or self.opts.include_empty_samples:
-                out.append(
-                    SampleRecord(
-                        sample_id=sample.sample_id,
-                        scene_tags=list(scene.tags),
-                        image_src_path=sample.image_path,
-                        image_out_name=f"{sample.sample_id}.png",
-                        width=idx.shape[1],
-                        height=idx.shape[0],
-                        instances=instances,
-                        extra={},
-                    )
+    def extract_sample(self, ctx, sample):
+        scene = load_scene_meta(sample.meta_path)
+        idx = read_index_map(sample.index_path)
+        instances = []
+        for obj in scene.objects:
+            if "sphere" not in obj.tags:
+                continue
+            mask = object_mask(idx, obj.index)
+            bbox = extract_bbox(mask)
+            norm = normalize_bbox(bbox, idx.shape[1], idx.shape[0]) if bbox else None
+            instances.append(
+                InstanceRecord(
+                    sample_id=sample.sample_id,
+                    object_index=obj.index,
+                    class_name="sphere",
+                    class_id=0,
+                    object_tags=list(obj.tags),
+                    bbox_xyxy=bbox,
+                    bbox_norm_cxcywh=norm,
+                    polygon_norm=None,
+                    area_px=int(mask.sum()),
+                    extra={},
                 )
+            )
 
-        return DatasetIR(samples=out, class_names=classes, meta={})
+        if not instances and not self.opts.include_empty_samples:
+            return None
+
+        return SampleRecord(
+            sample_id=sample.sample_id,
+            scene_tags=list(scene.tags),
+            image_src_path=sample.image_path,
+            image_out_name=f"{sample.sample_id}.png",
+            width=idx.shape[1],
+            height=idx.shape[0],
+            instances=instances,
+            extra={},
+        )
 """,
         encoding="utf-8",
     )
@@ -133,14 +132,15 @@ class ExporterPlugin(BaseExporter):
     def export_dataset(self, ctx):
         ctx.mkdir(Path("images"))
         outputs = []
+        sample_count = sum(1 for _ in ctx.iter_samples(order="sequential"))
         if self.opts.write_summary:
             summary = ctx.write_text(
                 Path("summary.txt"),
-                str(len(ctx.dataset.samples)),
+                str(sample_count),
             )
             outputs.append(str(summary))
         return ExporterRunResult(
-            stats={"samples": len(ctx.dataset.samples)},
+            stats={"samples": sample_count},
             outputs=outputs,
             meta={},
         )

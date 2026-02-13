@@ -17,7 +17,8 @@ def test_load_builtin_plugins() -> None:
     )
     exporter, exp_info = load_exporter("default-yolo-seg", {})
 
-    assert hasattr(extractor, "extract_dataset")
+    assert hasattr(extractor, "describe_dataset")
+    assert hasattr(extractor, "extract_sample")
     assert hasattr(exporter, "export_dataset")
     assert ext_info.source == "builtin"
     assert exp_info.source == "builtin"
@@ -43,15 +44,19 @@ class ExtractorPlugin(BaseExtractor):
         super().__init__(opts)
         self.opts = opts
 
-    def extract_dataset(self, ctx):
+    def describe_dataset(self, ctx):
         return self.opts.dataset
+
+    def extract_sample(self, ctx, sample):
+        return None
 """,
         encoding="utf-8",
     )
 
     extractor, info = load_extractor(str(plugin), {"dataset": object()})
 
-    assert hasattr(extractor, "extract_dataset")
+    assert hasattr(extractor, "describe_dataset")
+    assert hasattr(extractor, "extract_sample")
     assert info.source == "path"
 
 
@@ -74,7 +79,10 @@ class ExtractorPlugin(BaseExtractor):
     OptionsModel = object
     produced_features = frozenset({"instance_class"})
 
-    def extract_dataset(self, ctx):
+    def describe_dataset(self, ctx):
+        return None
+
+    def extract_sample(self, ctx, sample):
         return None
 """,
         encoding="utf-8",

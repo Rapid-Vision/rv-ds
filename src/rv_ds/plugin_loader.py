@@ -128,10 +128,20 @@ def _instantiate_plugin(
             f"invalid {plugin_type} options for '{plugin_name}': {exc}"
         ) from exc
 
-    plugin = plugin_class(validated_opts)
-    if plugin_type == "extractor" and not hasattr(plugin, "extract_dataset"):
+    try:
+        plugin = plugin_class(validated_opts)
+    except TypeError as exc:
         raise ValidationFailure(
-            f"extractor plugin '{plugin_name}' did not implement extract_dataset(ctx)"
+            f"failed to instantiate {plugin_type} plugin '{plugin_name}': {exc}"
+        ) from exc
+    if plugin_type == "extractor" and not hasattr(plugin, "describe_dataset"):
+        raise ValidationFailure(
+            f"extractor plugin '{plugin_name}' did not implement describe_dataset(ctx)"
+        )
+    if plugin_type == "extractor" and not hasattr(plugin, "extract_sample"):
+        raise ValidationFailure(
+            f"extractor plugin '{plugin_name}' did not implement "
+            "extract_sample(ctx, sample)"
         )
     if plugin_type == "exporter" and not hasattr(plugin, "export_dataset"):
         raise ValidationFailure(

@@ -8,10 +8,16 @@ from ..filters import (
     passes_min_counts,
     scene_passes_filters,
 )
-from ..ir import DatasetIR, InstanceRecord, SampleRecord
+from ..ir import InstanceRecord, SampleRecord
 from ..mask_ops import object_mask, read_index_map
 from ..models import SceneObject, load_scene_meta
-from ..plugin_api import BaseExtractor, ExtractionContext, PluginOptions
+from ..plugin_api import (
+    BaseExtractor,
+    ExtractionContext,
+    ExtractorDatasetInfo,
+    PluginOptions,
+)
+from ..scanner import SamplePaths
 from ..sdk import extract_bbox, extract_largest_polygon, normalize_bbox
 
 TaskMode = Literal["detect", "segment", "both"]
@@ -126,98 +132,92 @@ class DefaultExtractor(BaseExtractor[DefaultExtractorOptions]):
         self.mode = self.MODE
         self.opts = opts
 
-    def extract_dataset(self, ctx: ExtractionContext) -> DatasetIR:
+    def describe_dataset(self, ctx: ExtractionContext) -> ExtractorDatasetInfo:
+        _ = ctx
         class_names = [rule.class_name for rule in self.opts.class_mapping]
+        return ExtractorDatasetInfo(
+            class_names=class_names,
+            meta={"extractor": "default", "mode": self.mode},
+        )
+
+    def extract_sample(
+        self, ctx: ExtractionContext, sample: SamplePaths
+    ) -> SampleRecord | None:
         target_tags = set(self.opts.target_tags)
         required_tags = set(self.opts.require_tags)
         exclude_tags = set(self.opts.exclude_tags)
-        sample_records: list[SampleRecord] = []
+        scene = load_scene_meta(sample.meta_path)
+        if not scene_passes_filters(scene, required_tags, exclude_tags):
+            return None
 
-        for sample in ctx.samples:
-            scene = load_scene_meta(sample.meta_path)
-            if not scene_passes_filters(scene, required_tags, exclude_tags):
+        selected: list[tuple[SceneObject, int, str]] = []
+        for obj in scene.objects:
+            if not object_passes_target_tags(obj, target_tags):
                 continue
-
-            selected: list[tuple[SceneObject, int, str]] = []
-            for obj in scene.objects:
-                if not object_passes_target_tags(obj, target_tags):
-                    continue
-                class_id, class_name = _resolve_class(obj.tags, self.opts.class_mapping)
-                if class_id is None or class_name is None:
-                    continue
-                selected.append((obj, class_id, class_name))
-
-            if not passes_min_counts(
-                [obj for obj, _, _ in selected], self.opts.min_count
-            ):
+            class_id, class_name = _resolve_class(obj.tags, self.opts.class_mapping)
+            if class_id is None or class_name is None:
                 continue
+            selected.append((obj, class_id, class_name))
 
-            index_map = read_index_map(sample.index_path)
-            instances: list[InstanceRecord] = []
+        if not passes_min_counts([obj for obj, _, _ in selected], self.opts.min_count):
+            return None
 
-            for obj, class_id, class_name in selected:
-                mask = object_mask(index_map, obj.index)
-                area_px = int(mask.sum())
+        index_map = read_index_map(sample.index_path)
+        instances: list[InstanceRecord] = []
 
-                bbox_xyxy = None
-                bbox_norm = None
-                polygon_norm = None
+        for obj, class_id, class_name in selected:
+            mask = object_mask(index_map, obj.index)
+            area_px = int(mask.sum())
 
-                if self.mode in ("detect", "both"):
-                    bbox_xyxy = extract_bbox(mask)
-                    if bbox_xyxy is not None:
-                        bbox_norm = normalize_bbox(
-                            bbox_xyxy,
-                            width=index_map.shape[1],
-                            height=index_map.shape[0],
-                        )
+            bbox_xyxy = None
+            bbox_norm = None
+            polygon_norm = None
 
-                if self.mode in ("segment", "both"):
-                    polygon_norm = extract_largest_polygon(
-                        mask, epsilon_ratio=self.opts.epsilon_ratio
+            if self.mode in ("detect", "both"):
+                bbox_xyxy = extract_bbox(mask)
+                if bbox_xyxy is not None:
+                    bbox_norm = normalize_bbox(
+                        bbox_xyxy,
+                        width=index_map.shape[1],
+                        height=index_map.shape[0],
                     )
 
-                if bbox_xyxy is None and polygon_norm is None:
-                    continue
-
-                instances.append(
-                    InstanceRecord(
-                        sample_id=sample.sample_id,
-                        object_index=obj.index,
-                        class_name=class_name,
-                        class_id=class_id,
-                        object_tags=list(obj.tags),
-                        bbox_xyxy=bbox_xyxy,
-                        bbox_norm_cxcywh=bbox_norm,
-                        polygon_norm=polygon_norm,
-                        area_px=area_px,
-                        extra={},
-                    )
+            if self.mode in ("segment", "both"):
+                polygon_norm = extract_largest_polygon(
+                    mask, epsilon_ratio=self.opts.epsilon_ratio
                 )
 
-            if not instances and not self.opts.include_empty:
+            if bbox_xyxy is None and polygon_norm is None:
                 continue
 
-            sample_records.append(
-                SampleRecord(
+            instances.append(
+                InstanceRecord(
                     sample_id=sample.sample_id,
-                    scene_tags=list(scene.tags),
-                    image_src_path=sample.image_path,
-                    image_out_name=f"{sample.sample_id}.png",
-                    width=index_map.shape[1],
-                    height=index_map.shape[0],
-                    instances=instances,
+                    object_index=obj.index,
+                    class_name=class_name,
+                    class_id=class_id,
+                    object_tags=list(obj.tags),
+                    bbox_xyxy=bbox_xyxy,
+                    bbox_norm_cxcywh=bbox_norm,
+                    polygon_norm=polygon_norm,
+                    area_px=area_px,
                     extra={},
                 )
             )
 
-        dataset = DatasetIR(
-            samples=sample_records,
-            class_names=class_names,
-            meta={"extractor": "default", "mode": self.mode},
+        if not instances and not self.opts.include_empty:
+            return None
+
+        return SampleRecord(
+            sample_id=sample.sample_id,
+            scene_tags=list(scene.tags),
+            image_src_path=sample.image_path,
+            image_out_name=f"{sample.sample_id}.png",
+            width=index_map.shape[1],
+            height=index_map.shape[0],
+            instances=instances,
+            extra={},
         )
-        dataset.validate()
-        return dataset
 
 
 class DefaultSegmentExtractor(DefaultExtractor):

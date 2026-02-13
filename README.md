@@ -2,8 +2,8 @@
 
 `rv-ds` is a two-stage export framework for RV intermediate datasets.
 
-1. **Extractor**: builds a standardized intermediate representation (IR) from RV samples.
-2. **Exporter**: writes IR to a target format (YOLO in v1 builtins).
+1. **Extractor**: describes dataset metadata and yields sample records on demand.
+2. **Exporter**: pulls samples from extractor stream and writes a target format.
 
 ## Install
 
@@ -91,6 +91,16 @@ Matching rules:
 - `Sample`: one scene/image item in a dataset.
 - `Instance`: one object annotation in a sample.
 
+## Streaming Execution Model
+
+- Pipeline discovers all sample paths first.
+- Exporter drives extraction by calling `ctx.iter_samples(...)`.
+- Extractor processes only requested samples.
+- Preview exporters can stop early with `max_samples` to avoid full-dataset extraction.
+
+Framework options (via `_framework` in extractor/exporter opts):
+- `_framework.random_seed`: optional integer seed used for deterministic random sample order.
+
 ## Output shape (default YOLO)
 
 ```text
@@ -111,6 +121,10 @@ Matching rules:
 <output>/<timestamp>/rv_ds_meta.json
 ```
 
+Preview exporter options:
+- `include_empty: bool = true`
+- `max_samples: int | null = null`
+
 ## Plugin API
 
 Extractor plugin file must expose:
@@ -120,6 +134,7 @@ from rv_ds.plugin_api import (
     INSTANCE_BBOX,
     INSTANCE_CLASS,
     BaseExtractor,
+    ExtractorDatasetInfo,
     PluginOptions,
 )
 
@@ -136,7 +151,10 @@ class ExtractorPlugin(BaseExtractor):
         super().__init__(opts)
         self.opts = opts
 
-    def extract_dataset(self, ctx):
+    def describe_dataset(self, ctx) -> ExtractorDatasetInfo:
+        return ExtractorDatasetInfo(class_names=["sphere"], meta={})
+
+    def extract_sample(self, ctx, sample):
         ...
 ```
 
@@ -164,6 +182,8 @@ class ExporterPlugin(BaseExporter):
         self.opts = opts
 
     def export_dataset(self, ctx):
+        for sample in ctx.iter_samples(order="sequential"):
+            ...
         ...
 ```
 

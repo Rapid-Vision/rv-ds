@@ -107,8 +107,7 @@ def test_missing_contract_declaration_fails_load(tmp_path: Path) -> None:
     extractor = tmp_path / "extractor.py"
     extractor.write_text(
         """
-from rv_ds.ir import DatasetIR
-from rv_ds.plugin_api import BaseExtractor, PluginOptions
+from rv_ds.plugin_api import BaseExtractor, ExtractorDatasetInfo, PluginOptions
 
 
 class ExtractorOptions(PluginOptions):
@@ -118,8 +117,11 @@ class ExtractorOptions(PluginOptions):
 class ExtractorPlugin(BaseExtractor):
     OptionsModel = ExtractorOptions
 
-    def extract_dataset(self, ctx):
-        return DatasetIR(samples=[], class_names=[], meta={})
+    def describe_dataset(self, ctx):
+        return ExtractorDatasetInfo(class_names=[], meta={})
+
+    def extract_sample(self, ctx, sample):
+        return None
 """,
         encoding="utf-8",
     )
@@ -153,8 +155,7 @@ def test_custom_feature_contract_pass_and_fail(tmp_path: Path) -> None:
     extractor_ok = tmp_path / "extractor_ok.py"
     extractor_ok.write_text(
         """
-from rv_ds.ir import DatasetIR
-from rv_ds.plugin_api import BaseExtractor, PluginOptions
+from rv_ds.plugin_api import BaseExtractor, ExtractorDatasetInfo, PluginOptions
 
 
 class ExtractorOptions(PluginOptions):
@@ -165,8 +166,11 @@ class ExtractorPlugin(BaseExtractor):
     OptionsModel = ExtractorOptions
     produced_features = frozenset({"custom:instance_bbox_6d"})
 
-    def extract_dataset(self, ctx):
-        return DatasetIR(samples=[], class_names=[], meta={})
+    def describe_dataset(self, ctx):
+        return ExtractorDatasetInfo(class_names=[], meta={})
+
+    def extract_sample(self, ctx, sample):
+        return None
 """,
         encoding="utf-8",
     )
@@ -174,8 +178,7 @@ class ExtractorPlugin(BaseExtractor):
     extractor_bad = tmp_path / "extractor_bad.py"
     extractor_bad.write_text(
         """
-from rv_ds.ir import DatasetIR
-from rv_ds.plugin_api import BaseExtractor, PluginOptions
+from rv_ds.plugin_api import BaseExtractor, ExtractorDatasetInfo, PluginOptions
 
 
 class ExtractorOptions(PluginOptions):
@@ -186,8 +189,11 @@ class ExtractorPlugin(BaseExtractor):
     OptionsModel = ExtractorOptions
     produced_features = frozenset({"instance_bbox"})
 
-    def extract_dataset(self, ctx):
-        return DatasetIR(samples=[], class_names=[], meta={})
+    def describe_dataset(self, ctx):
+        return ExtractorDatasetInfo(class_names=[], meta={})
+
+    def extract_sample(self, ctx, sample):
+        return None
 """,
         encoding="utf-8",
     )
@@ -248,8 +254,7 @@ def test_invalid_feature_name_rejected(tmp_path: Path) -> None:
     extractor = tmp_path / "extractor.py"
     extractor.write_text(
         """
-from rv_ds.ir import DatasetIR
-from rv_ds.plugin_api import BaseExtractor, PluginOptions
+from rv_ds.plugin_api import BaseExtractor, ExtractorDatasetInfo, PluginOptions
 
 
 class ExtractorOptions(PluginOptions):
@@ -260,11 +265,108 @@ class ExtractorPlugin(BaseExtractor):
     OptionsModel = ExtractorOptions
     produced_features = frozenset({"BAD FEATURE"})
 
-    def extract_dataset(self, ctx):
-        return DatasetIR(samples=[], class_names=[], meta={})
+    def describe_dataset(self, ctx):
+        return ExtractorDatasetInfo(class_names=[], meta={})
+
+    def extract_sample(self, ctx, sample):
+        return None
 """,
         encoding="utf-8",
     )
 
     with pytest.raises(ValidationFailure, match="invalid feature name"):
         load_extractor(str(extractor), {})
+
+
+def test_legacy_extract_dataset_api_is_rejected(tmp_path: Path) -> None:
+    extractor = tmp_path / "extractor.py"
+    extractor.write_text(
+        """
+from rv_ds.ir import DatasetIR
+from rv_ds.plugin_api import BaseExtractor, PluginOptions
+
+
+class ExtractorOptions(PluginOptions):
+    pass
+
+
+class ExtractorPlugin(BaseExtractor):
+    OptionsModel = ExtractorOptions
+    produced_features = frozenset({"instance_bbox"})
+
+    def extract_dataset(self, ctx):
+        return DatasetIR(samples=[], class_names=[], meta={})
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationFailure, match="describe_dataset"):
+        load_extractor(str(extractor), {})
+
+
+def test_fail_on_warning_stops_before_exporter_runs(tmp_path: Path) -> None:
+    extractor = tmp_path / "extractor.py"
+    extractor.write_text(
+        """
+from rv_ds.plugin_api import BaseExtractor, ExtractorDatasetInfo, PluginOptions
+
+
+class ExtractorOptions(PluginOptions):
+    pass
+
+
+class ExtractorPlugin(BaseExtractor):
+    OptionsModel = ExtractorOptions
+    produced_features = frozenset({"instance_class"})
+
+    def describe_dataset(self, ctx):
+        ctx.warn("describe warning")
+        return ExtractorDatasetInfo(class_names=[], meta={})
+
+    def extract_sample(self, ctx, sample):
+        return None
+""",
+        encoding="utf-8",
+    )
+
+    exporter = tmp_path / "exporter.py"
+    exporter.write_text(
+        """
+from rv_ds.plugin_api import BaseExporter, ExporterRunResult, PluginOptions
+
+
+class ExporterOptions(PluginOptions):
+    pass
+
+
+class ExporterPlugin(BaseExporter):
+    OptionsModel = ExporterOptions
+    required_features = frozenset({"instance_class"})
+
+    def export_dataset(self, ctx):
+        raise RuntimeError("exporter-should-not-run")
+""",
+        encoding="utf-8",
+    )
+
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir)
+
+    cfg = ExportConfig(
+        dataset_dir=dataset_dir,
+        output_dir=tmp_path / "out",
+        image_file="Image.png",
+        extractor_spec=str(extractor),
+        extractor_opts={},
+        exporter_spec=str(exporter),
+        exporter_opts={},
+        fail_on_plugin_warning=True,
+        dump_ir=False,
+    )
+
+    with pytest.raises(
+        ValidationFailure,
+        match="extractor produced warnings and fail-on-warning is set",
+    ):
+        run_export(cfg)

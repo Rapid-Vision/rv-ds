@@ -24,7 +24,7 @@ class DefaultYoloExporter(BaseExporter[DefaultYoloExporterOptions]):
         exported_samples = 0
         empty_label_files = 0
 
-        for sample in ctx.dataset.samples:
+        for sample in ctx.iter_samples(order="sequential"):
             ctx.copy_image(sample.image_src_path, images_dir / sample.image_out_name)
 
             lines: list[str] = []
@@ -49,7 +49,7 @@ class DefaultYoloExporter(BaseExporter[DefaultYoloExporterOptions]):
             exported_samples += 1
 
         data_yaml_path = ctx.safe_path(Path("data.yaml"))
-        write_data_yaml(data_yaml_path, ctx.dataset.class_names)
+        write_data_yaml(data_yaml_path, ctx.dataset_info.class_names)
         ctx.add_output(data_yaml_path)
 
         return ExporterRunResult(

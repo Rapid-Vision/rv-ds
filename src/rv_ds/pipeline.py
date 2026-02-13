@@ -1,21 +1,26 @@
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+import random
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Iterator
 
 from .errors import ValidationFailure
-from .ir import DatasetIR
+from .ir import DatasetIR, SampleRecord
 from .plugin_api import (
     BaseExporter,
     BaseExtractor,
     ExportContext,
     ExporterRunResult,
     ExtractionContext,
+    ExtractorDatasetInfo,
+    StreamRequest,
 )
 from .plugin_loader import load_exporter, load_extractor
 from .scanner import SamplePaths, discover_samples
+
+IteratorFactory = Callable[[StreamRequest, int | None], Iterator[SampleRecord]]
 
 
 @dataclass(frozen=True)
@@ -54,6 +59,20 @@ class PreparedContexts:
     exporter_info: Any
     extraction_ctx: ExtractionContext
     framework_opts_exporter: dict[str, Any]
+    random_seed: int | None
+
+
+@dataclass
+class DescribePhaseResult:
+    dataset_info: ExtractorDatasetInfo
+
+
+@dataclass
+class StreamState:
+    processed_candidates: int = 0
+    yielded_samples: int = 0
+    stream_started: bool = False
+    collected_samples: list[SampleRecord] = field(default_factory=list)
 
 
 @dataclass
@@ -61,6 +80,7 @@ class ExportPhaseResult:
     export_ctx: ExportContext
     export_result: ExporterRunResult
     exporter_info: Any
+    stream_state: StreamState
 
 
 def load_json_opts(path: Path | None) -> dict[str, Any]:
@@ -85,9 +105,14 @@ def load_json_opts(path: Path | None) -> dict[str, Any]:
 
 def run_export(config: ExportConfig) -> ExportResult:
     prepared = prepare_contexts(config)
-    dataset = run_extraction(config, prepared)
-    export_phase = run_exporter(config, prepared, dataset)
-    return finalize_meta(config, prepared, dataset, export_phase)
+    describe_phase = run_extractor_describe(config, prepared)
+    if prepared.extraction_ctx.warnings and config.fail_on_plugin_warning:
+        joined = " | ".join(prepared.extraction_ctx.warnings)
+        raise ValidationFailure(
+            f"extractor produced warnings and fail-on-warning is set: {joined}"
+        )
+    export_phase = run_exporter(config, prepared, describe_phase)
+    return finalize_meta(config, prepared, describe_phase, export_phase)
 
 
 def prepare_contexts(config: ExportConfig) -> PreparedContexts:
@@ -97,6 +122,10 @@ def prepare_contexts(config: ExportConfig) -> PreparedContexts:
 
     framework_opts_extractor = _read_framework_opts(config.extractor_opts)
     framework_opts_exporter = _read_framework_opts(config.exporter_opts)
+    random_seed = _read_framework_random_seed(
+        framework_opts_extractor, framework_opts_exporter
+    )
+
     extractor_opts = _strip_framework_opts(config.extractor_opts)
     exporter_opts = _strip_framework_opts(config.exporter_opts)
 
@@ -124,44 +153,43 @@ def prepare_contexts(config: ExportConfig) -> PreparedContexts:
         exporter_info=exporter_info,
         extraction_ctx=extraction_ctx,
         framework_opts_exporter=framework_opts_exporter,
+        random_seed=random_seed,
     )
 
 
-def run_extraction(config: ExportConfig, prepared: PreparedContexts) -> DatasetIR:
+def run_extractor_describe(
+    config: ExportConfig, prepared: PreparedContexts
+) -> DescribePhaseResult:
     try:
-        dataset = prepared.extractor.extract_dataset(prepared.extraction_ctx)
+        dataset_info = prepared.extractor.describe_dataset(prepared.extraction_ctx)
     except Exception as exc:  # noqa: BLE001
         raise ValidationFailure(
-            f"extractor '{config.extractor_spec}' failed while processing dataset: {exc}"
+            f"extractor '{config.extractor_spec}' failed while describing dataset: {exc}"
         ) from exc
 
-    if not isinstance(dataset, DatasetIR):
+    if not isinstance(dataset_info, ExtractorDatasetInfo):
         raise ValidationFailure(
-            f"extractor '{config.extractor_spec}' returned unsupported result type: "
-            f"{type(dataset)!r}"
+            f"extractor '{config.extractor_spec}' returned unsupported dataset info type: "
+            f"{type(dataset_info)!r}"
         )
 
-    dataset.validate()
-
-    if prepared.extraction_ctx.warnings and config.fail_on_plugin_warning:
-        joined = " | ".join(prepared.extraction_ctx.warnings)
-        raise ValidationFailure(
-            f"extractor produced warnings and fail-on-warning is set: {joined}"
-        )
-
-    if config.dump_ir:
-        (prepared.export_dir / "ir_dump.json").write_text(
-            json.dumps(dataset.to_dict(), indent=2), encoding="utf-8"
-        )
-
-    return dataset
+    _validate_dataset_info(dataset_info)
+    return DescribePhaseResult(dataset_info=dataset_info)
 
 
 def run_exporter(
-    config: ExportConfig, prepared: PreparedContexts, dataset: DatasetIR
+    config: ExportConfig,
+    prepared: PreparedContexts,
+    describe_phase: DescribePhaseResult,
 ) -> ExportPhaseResult:
+    sample_iterator, stream_state = _build_sample_iterator(
+        config=config,
+        prepared=prepared,
+        collect_samples=config.dump_ir,
+    )
     export_ctx = ExportContext(
-        dataset=dataset,
+        dataset_info=describe_phase.dataset_info,
+        _sample_iterator=sample_iterator,
         output_dir=prepared.export_dir,
         framework_options=prepared.framework_opts_exporter,
     )
@@ -176,17 +204,85 @@ def run_exporter(
     export_result = _normalize_exporter_result(raw_export_result)
     _validate_export_outputs(prepared.export_dir, export_ctx, export_result)
 
+    if prepared.extraction_ctx.warnings and config.fail_on_plugin_warning:
+        joined = " | ".join(prepared.extraction_ctx.warnings)
+        raise ValidationFailure(
+            f"extractor produced warnings and fail-on-warning is set: {joined}"
+        )
+
     if export_ctx.warnings and config.fail_on_plugin_warning:
         joined = " | ".join(export_ctx.warnings)
         raise ValidationFailure(
             f"exporter produced warnings and fail-on-warning is set: {joined}"
         )
 
+    if config.dump_ir:
+        dataset = DatasetIR(
+            samples=stream_state.collected_samples,
+            class_names=describe_phase.dataset_info.class_names,
+            meta=dict(describe_phase.dataset_info.meta),
+        )
+        dataset.validate()
+        (prepared.export_dir / "ir_dump.json").write_text(
+            json.dumps(dataset.to_dict(), indent=2), encoding="utf-8"
+        )
+
     return ExportPhaseResult(
         export_ctx=export_ctx,
         export_result=export_result,
         exporter_info=prepared.exporter_info,
+        stream_state=stream_state,
     )
+
+
+def _build_sample_iterator(
+    config: ExportConfig,
+    prepared: PreparedContexts,
+    collect_samples: bool,
+) -> tuple[IteratorFactory, StreamState]:
+    state = StreamState()
+
+    def _iter(request: StreamRequest, max_samples: int | None) -> Iterator[SampleRecord]:
+        if state.stream_started:
+            raise ValidationFailure(
+                "exporter requested sample stream multiple times; only one pass is supported"
+            )
+
+        state.stream_started = True
+        sample_paths = list(prepared.samples)
+        if request.order == "random":
+            rng = random.Random(prepared.random_seed)
+            rng.shuffle(sample_paths)
+
+        yielded_this_call = 0
+        for sample_path in sample_paths:
+            state.processed_candidates += 1
+            try:
+                extracted = prepared.extractor.extract_sample(
+                    prepared.extraction_ctx, sample_path
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise ValidationFailure(
+                    "extractor "
+                    f"'{config.extractor_spec}' failed while processing sample "
+                    f"'{sample_path.sample_id}': {exc}"
+                ) from exc
+
+            if extracted is None:
+                continue
+
+            extracted.validate()
+            state.yielded_samples += 1
+            if collect_samples:
+                state.collected_samples.append(extracted)
+
+            yield extracted
+
+            yielded_this_call += 1
+            if max_samples is not None and yielded_this_call >= max_samples:
+                break
+
+    return _iter, state
 
 
 def _validate_feature_contract(
@@ -207,15 +303,25 @@ def _validate_feature_contract(
         )
 
 
+def _validate_dataset_info(dataset_info: ExtractorDatasetInfo) -> None:
+    if not all(isinstance(name, str) for name in dataset_info.class_names):
+        raise ValidationFailure("extractor dataset info class_names must be list[str]")
+    if len(set(dataset_info.class_names)) != len(dataset_info.class_names):
+        raise ValidationFailure("extractor dataset info class_names must be unique")
+    if not isinstance(dataset_info.meta, dict):
+        raise ValidationFailure("extractor dataset info meta must be object")
+
+
 def finalize_meta(
     config: ExportConfig,
     prepared: PreparedContexts,
-    dataset: DatasetIR,
+    describe_phase: DescribePhaseResult,
     export_phase: ExportPhaseResult,
 ) -> ExportResult:
+    _ = describe_phase
     stats = ExportStats(
         discovered_samples=len(prepared.samples),
-        extracted_samples=len(dataset.samples),
+        extracted_samples=export_phase.stream_state.yielded_samples,
         exporter_outputs=(
             len(export_phase.export_result.outputs)
             if export_phase.export_result.outputs
@@ -232,6 +338,7 @@ def finalize_meta(
         extraction_warnings=list(prepared.extraction_ctx.warnings),
         export_warnings=list(export_phase.export_ctx.warnings),
         exporter_result=export_phase.export_result,
+        stream_state=export_phase.stream_state,
     )
 
     return ExportResult(export_dir=prepared.export_dir, stats=stats)
@@ -242,6 +349,44 @@ def _read_framework_opts(opts: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValidationFailure("reserved options key '_framework' must be an object")
     return raw
+
+
+def _read_framework_random_seed(
+    extractor_framework_opts: dict[str, Any],
+    exporter_framework_opts: dict[str, Any],
+) -> int | None:
+    extractor_seed_raw = extractor_framework_opts.get("random_seed")
+    exporter_seed_raw = exporter_framework_opts.get("random_seed")
+    extractor_seed: int | None = None
+    exporter_seed: int | None = None
+
+    for source, value in (
+        ("extractor", extractor_seed_raw),
+        ("exporter", exporter_seed_raw),
+    ):
+        if value is None:
+            continue
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValidationFailure(
+                f"_framework.random_seed for {source} must be integer"
+            )
+        if source == "extractor":
+            extractor_seed = value
+        else:
+            exporter_seed = value
+
+    if (
+        extractor_seed is not None
+        and exporter_seed is not None
+        and extractor_seed != exporter_seed
+    ):
+        raise ValidationFailure(
+            "_framework.random_seed mismatch between extractor and exporter options"
+        )
+
+    if extractor_seed is not None:
+        return extractor_seed
+    return exporter_seed
 
 
 def _strip_framework_opts(opts: dict[str, Any]) -> dict[str, Any]:
@@ -342,6 +487,7 @@ def _write_meta(
     extraction_warnings: list[str],
     export_warnings: list[str],
     exporter_result: ExporterRunResult,
+    stream_state: StreamState,
 ) -> None:
     payload = {
         "config": {
@@ -356,6 +502,10 @@ def _write_meta(
             "exporter": asdict(exporter_info),
         },
         "stats": asdict(stats),
+        "stream": {
+            "processed_candidates": stream_state.processed_candidates,
+            "yielded_samples": stream_state.yielded_samples,
+        },
         "warnings": {
             "extractor": extraction_warnings,
             "exporter": export_warnings,

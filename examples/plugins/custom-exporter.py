@@ -25,8 +25,10 @@ class ExporterPlugin(BaseExporter[ExporterOptions]):
     def export_dataset(self, ctx):
         images_dir = ctx.mkdir(Path("images"))
         labels = []
+        sample_count = 0
 
-        for sample in ctx.dataset.samples:
+        for sample in ctx.iter_samples(order="sequential"):
+            sample_count += 1
             ctx.copy_image(sample.image_src_path, images_dir / sample.image_out_name)
 
             for inst in sample.instances:
@@ -50,6 +52,6 @@ class ExporterPlugin(BaseExporter[ExporterOptions]):
 
         return ExporterRunResult(
             outputs=[str(labels_path)],
-            stats={"samples": len(ctx.dataset.samples), "labels": len(labels)},
+            stats={"samples": sample_count, "labels": len(labels)},
             meta={"format": "json-bbox"},
         )
