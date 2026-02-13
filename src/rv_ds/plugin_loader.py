@@ -34,13 +34,13 @@ class LoadedPlugin:
 
 
 BUILTIN_EXTRACTORS: dict[str, type[ExtractorType]] = {
-    "default-segment": DefaultSegmentExtractor,
-    "default-detection": DefaultDetectionExtractor,
-    "default-both": DefaultBothExtractor,
+    "default-seg": DefaultSegmentExtractor,
+    "default-bbox": DefaultDetectionExtractor,
+    "default-seg-bbox": DefaultBothExtractor,
 }
 
 BUILTIN_EXPORTERS: dict[str, type[ExporterType]] = {
-    "default-yolo": DefaultYoloExporter,
+    "default-yolo-seg": DefaultYoloExporter,
     "default-preview-bbox": DefaultPreviewBBoxExporter,
     "default-preview-seg": DefaultPreviewSegExporter,
 }

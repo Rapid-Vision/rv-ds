@@ -156,12 +156,12 @@ def test_builtin_extractor_and_exporter(tmp_path: Path) -> None:
         dataset_dir=dataset_dir,
         output_dir=tmp_path / "exports",
         image_file="Image.png",
-        extractor_spec="default-segment",
+        extractor_spec="default-seg",
         extractor_opts={
             "class_mapping": [{"class": "sphere", "required_tags": ["sphere"]}],
             "target_tags": ["sphere"],
         },
-        exporter_spec="default-yolo",
+        exporter_spec="default-yolo-seg",
         exporter_opts={},
         fail_on_plugin_warning=False,
         dump_ir=False,
@@ -191,7 +191,7 @@ def test_custom_extractor_builtin_exporter(tmp_path: Path) -> None:
         image_file="Image.png",
         extractor_spec=str(extractor),
         extractor_opts={},
-        exporter_spec="default-yolo",
+        exporter_spec="default-yolo-seg",
         exporter_opts={},
         fail_on_plugin_warning=False,
         dump_ir=False,
@@ -213,7 +213,7 @@ def test_builtin_extractor_custom_exporter(tmp_path: Path) -> None:
         dataset_dir=dataset_dir,
         output_dir=tmp_path / "exports",
         image_file="Image.png",
-        extractor_spec="default-detection",
+        extractor_spec="default-bbox",
         extractor_opts={
             "class_mapping": [{"class": "sphere", "required_tags": ["sphere"]}]
         },

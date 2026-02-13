@@ -15,10 +15,10 @@ uv sync --dev
 
 ```bash
 uv run rv-ds export <dataset_dir> \
-  --extractor default-segment \
-  --extractor-opts ./examples/opts/extractor.default-segment.json \
-  --exporter default-yolo \
-  --exporter-opts ./examples/opts/exporter.default-yolo.json
+  --extractor default-seg \
+  --extractor-opts ./examples/opts/extractor.default-seg.json \
+  --exporter default-yolo-seg \
+  --exporter-opts ./examples/opts/exporter.default-yolo-seg.json
 ```
 
 ### Command
@@ -39,18 +39,18 @@ Optional flags:
 - `--debug`
 
 Builtin extractors:
-- `default-segment`
-- `default-detection`
-- `default-both`
+- `default-seg`
+- `default-bbox`
+- `default-seg-bbox`
 
 Builtin exporters:
-- `default-yolo`
+- `default-yolo-seg`
 - `default-preview-bbox`
 - `default-preview-seg`
 
 ### Built-in extractor options (`class_mapping`)
 
-`default-segment`, `default-detection`, and `default-both` expect:
+`default-seg`, `default-bbox`, and `default-seg-bbox` expect:
 
 ```json
 {
@@ -173,16 +173,16 @@ Custom extractor + built-in YOLO exporter:
 uv run rv-ds export ./examples/dataset \
   --extractor ./examples/plugins/custom-extractor.py \
   --extractor-opts ./examples/opts/extractor.custom-simple.json \
-  --exporter default-yolo \
-  --exporter-opts ./examples/opts/exporter.default-yolo.json
+  --exporter default-yolo-seg \
+  --exporter-opts ./examples/opts/exporter.default-yolo-seg.json
 ```
 
 Built-in extractor + custom exporter:
 
 ```bash
 uv run rv-ds export ./examples/dataset \
-  --extractor default-detection \
-  --extractor-opts ./examples/opts/extractor.default-segment.json \
+  --extractor default-bbox \
+  --extractor-opts ./examples/opts/extractor.default-seg.json \
   --exporter ./examples/plugins/custom-exporter.py \
   --exporter-opts ./examples/opts/exporter.custom-simple.json
 ```
@@ -191,20 +191,20 @@ Built-in extractor + preview bbox exporter:
 
 ```bash
 uv run rv-ds export ./examples/dataset \
-  --extractor default-detection \
-  --extractor-opts ./examples/opts/extractor.default-segment.json \
+  --extractor default-bbox \
+  --extractor-opts ./examples/opts/extractor.default-seg.json \
   --exporter default-preview-bbox \
-  --exporter-opts '{}'
+  --exporter-opts ./examples/opts/exporter.default-preview-bbox.json
 ```
 
 Built-in extractor + preview seg exporter:
 
 ```bash
 uv run rv-ds export ./examples/dataset \
-  --extractor default-segment \
-  --extractor-opts ./examples/opts/extractor.default-segment.json \
+  --extractor default-seg \
+  --extractor-opts ./examples/opts/extractor.default-seg.json \
   --exporter default-preview-seg \
-  --exporter-opts '{}'
+  --exporter-opts ./examples/opts/exporter.default-preview-seg.json
 ```
 
 Custom extractor + custom exporter:

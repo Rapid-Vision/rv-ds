@@ -60,7 +60,7 @@ class DefaultYoloExporter(BaseExporter[DefaultYoloExporterOptions]):
                 "empty_label_files": empty_label_files,
             },
             outputs=[str(path) for path in ctx.outputs],
-            meta={"exporter": "default-yolo"},
+            meta={"exporter": "default-yolo-seg"},
         )
 
 

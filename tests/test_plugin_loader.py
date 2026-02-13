@@ -8,14 +8,14 @@ from rv_ds.plugin_loader import load_exporter, load_extractor
 
 def test_load_builtin_plugins() -> None:
     extractor, ext_info = load_extractor(
-        "default-segment",
+        "default-seg",
         {
             "class_mapping": [
                 {"class": "sphere", "required_tags": ["sphere"]},
             ]
         },
     )
-    exporter, exp_info = load_exporter("default-yolo", {})
+    exporter, exp_info = load_exporter("default-yolo-seg", {})
 
     assert hasattr(extractor, "extract_dataset")
     assert hasattr(exporter, "export_dataset")
