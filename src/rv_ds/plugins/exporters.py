@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from ..plugin_api import ExportContext, Exporter, ExporterRunResult, PluginOptions
+from ..plugin_api import BaseExporter, ExportContext, ExporterRunResult, PluginOptions
 from ..yolo import format_detect_line, format_segment_line, write_data_yaml
 
 
@@ -8,8 +8,11 @@ class DefaultYoloExporterOptions(PluginOptions):
     include_empty: bool = False
 
 
-class DefaultYoloExporter(Exporter):
+class DefaultYoloExporter(BaseExporter):
+    OptionsModel = DefaultYoloExporterOptions
+
     def __init__(self, opts: DefaultYoloExporterOptions) -> None:
+        super().__init__(opts)
         self.opts = opts
 
     def export_dataset(self, ctx: ExportContext) -> ExporterRunResult:
@@ -55,7 +58,3 @@ class DefaultYoloExporter(Exporter):
             outputs=[str(path) for path in sorted(ctx._outputs)],
             meta={"exporter": "default-yolo"},
         )
-
-
-def build_default_yolo_exporter(opts: DefaultYoloExporterOptions) -> Exporter:
-    return DefaultYoloExporter(opts)

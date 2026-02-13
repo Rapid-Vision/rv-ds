@@ -28,17 +28,22 @@ def test_load_path_extractor_plugin(tmp_path: Path) -> None:
     plugin.write_text(
         """
 from rv_ds.plugin_api import PluginOptions
+from rv_ds.plugin_api import BaseExtractor
 
 
 class ExtractorOptions(PluginOptions):
     dataset: object
 
 
-def build_extractor(opts: ExtractorOptions):
-    class P:
-        def extract_dataset(self, ctx):
-            return opts.dataset
-    return P()
+class ExtractorPlugin(BaseExtractor):
+    OptionsModel = ExtractorOptions
+
+    def __init__(self, opts: ExtractorOptions):
+        super().__init__(opts)
+        self.opts = opts
+
+    def extract_dataset(self, ctx):
+        return self.opts.dataset
 """,
         encoding="utf-8",
     )
@@ -57,15 +62,35 @@ def test_missing_builder_raises(tmp_path: Path) -> None:
         load_exporter(str(plugin), {})
 
 
-def test_missing_options_model_raises(tmp_path: Path) -> None:
-    plugin = tmp_path / "extractor_no_model.py"
+def test_invalid_options_model_raises(tmp_path: Path) -> None:
+    plugin = tmp_path / "extractor_bad_options.py"
     plugin.write_text(
         """
-def build_extractor(opts):
-    class P:
-        def extract_dataset(self, ctx):
-            return None
-    return P()
+from rv_ds.plugin_api import BaseExtractor
+
+
+class ExtractorPlugin(BaseExtractor):
+    OptionsModel = object
+
+    def extract_dataset(self, ctx):
+        return None
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationFailure):
+        load_extractor(str(plugin), {})
+
+
+def test_missing_plugin_class_raises(tmp_path: Path) -> None:
+    plugin = tmp_path / "extractor_no_class.py"
+    plugin.write_text(
+        """
+from rv_ds.plugin_api import PluginOptions
+
+
+class ExtractorOptions(PluginOptions):
+    x: int = 1
 """,
         encoding="utf-8",
     )

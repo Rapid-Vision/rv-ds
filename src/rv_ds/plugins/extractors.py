@@ -10,7 +10,7 @@ from ..filters import (
 from ..ir import DatasetIR, InstanceRecord, SampleRecord
 from ..mask_ops import object_mask, read_index_map
 from ..models import SceneObject, load_scene_meta
-from ..plugin_api import ExtractionContext, Extractor, PluginOptions
+from ..plugin_api import BaseExtractor, ExtractionContext, PluginOptions
 from ..sdk import extract_bbox, extract_largest_polygon, normalize_bbox
 
 TaskMode = Literal["detect", "segment", "both"]
@@ -116,9 +116,13 @@ class DefaultExtractorOptions(PluginOptions):
         return self
 
 
-class DefaultExtractor(Extractor):
-    def __init__(self, mode: TaskMode, opts: DefaultExtractorOptions) -> None:
-        self.mode = mode
+class DefaultExtractor(BaseExtractor):
+    OptionsModel = DefaultExtractorOptions
+    MODE: TaskMode = "segment"
+
+    def __init__(self, opts: DefaultExtractorOptions) -> None:
+        super().__init__(opts)
+        self.mode = self.MODE
         self.opts = opts
 
     def extract_dataset(self, ctx: ExtractionContext) -> DatasetIR:
@@ -215,16 +219,16 @@ class DefaultExtractor(Extractor):
         return dataset
 
 
-def build_default_segment_extractor(opts: DefaultExtractorOptions) -> Extractor:
-    return DefaultExtractor(mode="segment", opts=opts)
+class DefaultSegmentExtractor(DefaultExtractor):
+    MODE: TaskMode = "segment"
 
 
-def build_default_detection_extractor(opts: DefaultExtractorOptions) -> Extractor:
-    return DefaultExtractor(mode="detect", opts=opts)
+class DefaultDetectionExtractor(DefaultExtractor):
+    MODE: TaskMode = "detect"
 
 
-def build_default_both_extractor(opts: DefaultExtractorOptions) -> Extractor:
-    return DefaultExtractor(mode="both", opts=opts)
+class DefaultBothExtractor(DefaultExtractor):
+    MODE: TaskMode = "both"
 
 
 def _resolve_class(

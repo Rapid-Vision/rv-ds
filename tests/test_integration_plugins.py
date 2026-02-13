@@ -37,6 +37,7 @@ def _write_custom_extractor(path: Path) -> None:
     path.write_text(
         """
 from rv_ds.ir import DatasetIR, InstanceRecord, SampleRecord
+from rv_ds.plugin_api import BaseExtractor
 from rv_ds.sdk import (
     extract_bbox,
     load_scene_meta,
@@ -51,53 +52,56 @@ class ExtractorOptions(PluginOptions):
     include_empty_samples: bool = True
 
 
-def build_extractor(opts: ExtractorOptions):
-    class E:
-        def extract_dataset(self, ctx):
-            classes = ["sphere"]
-            out = []
-            for sample in ctx.samples:
-                scene = load_scene_meta(sample.meta_path)
-                idx = read_index_map(sample.index_path)
-                instances = []
-                for obj in scene.objects:
-                    if "sphere" not in obj.tags:
-                        continue
-                    mask = object_mask(idx, obj.index)
-                    bbox = extract_bbox(mask)
-                    norm = normalize_bbox(bbox, idx.shape[1], idx.shape[0]) if bbox else None
-                    instances.append(
-                        InstanceRecord(
-                            sample_id=sample.sample_id,
-                            object_index=obj.index,
-                            class_name="sphere",
-                            class_id=0,
-                            object_tags=list(obj.tags),
-                            bbox_xyxy=bbox,
-                            bbox_norm_cxcywh=norm,
-                            polygon_norm=None,
-                            area_px=int(mask.sum()),
-                            extra={},
-                        )
+class ExtractorPlugin(BaseExtractor):
+    OptionsModel = ExtractorOptions
+
+    def __init__(self, opts: ExtractorOptions):
+        super().__init__(opts)
+        self.opts = opts
+
+    def extract_dataset(self, ctx):
+        classes = ["sphere"]
+        out = []
+        for sample in ctx.samples:
+            scene = load_scene_meta(sample.meta_path)
+            idx = read_index_map(sample.index_path)
+            instances = []
+            for obj in scene.objects:
+                if "sphere" not in obj.tags:
+                    continue
+                mask = object_mask(idx, obj.index)
+                bbox = extract_bbox(mask)
+                norm = normalize_bbox(bbox, idx.shape[1], idx.shape[0]) if bbox else None
+                instances.append(
+                    InstanceRecord(
+                        sample_id=sample.sample_id,
+                        object_index=obj.index,
+                        class_name="sphere",
+                        class_id=0,
+                        object_tags=list(obj.tags),
+                        bbox_xyxy=bbox,
+                        bbox_norm_cxcywh=norm,
+                        polygon_norm=None,
+                        area_px=int(mask.sum()),
+                        extra={},
                     )
+                )
 
-                if instances or opts.include_empty_samples:
-                    out.append(
-                        SampleRecord(
-                            sample_id=sample.sample_id,
-                            scene_tags=list(scene.tags),
-                            image_src_path=sample.image_path,
-                            image_out_name=f"{sample.sample_id}.png",
-                            width=idx.shape[1],
-                            height=idx.shape[0],
-                            instances=instances,
-                            extra={},
-                        )
+            if instances or self.opts.include_empty_samples:
+                out.append(
+                    SampleRecord(
+                        sample_id=sample.sample_id,
+                        scene_tags=list(scene.tags),
+                        image_src_path=sample.image_path,
+                        image_out_name=f"{sample.sample_id}.png",
+                        width=idx.shape[1],
+                        height=idx.shape[0],
+                        instances=instances,
+                        extra={},
                     )
+                )
 
-            return DatasetIR(samples=out, class_names=classes, meta={})
-
-    return E()
+        return DatasetIR(samples=out, class_names=classes, meta={})
 """,
         encoding="utf-8",
     )
@@ -108,6 +112,7 @@ def _write_custom_exporter(path: Path) -> None:
         """
 from pathlib import Path
 
+from rv_ds.plugin_api import BaseExporter
 from rv_ds.plugin_api import PluginOptions
 from rv_ds.plugin_api import ExporterRunResult
 
@@ -116,24 +121,27 @@ class ExporterOptions(PluginOptions):
     write_summary: bool = True
 
 
-def build_exporter(opts: ExporterOptions):
-    class X:
-        def export_dataset(self, ctx):
-            ctx.mkdir(Path("images"))
-            outputs = []
-            if opts.write_summary:
-                summary = ctx.write_text(
-                    Path("summary.txt"),
-                    str(len(ctx.dataset.samples)),
-                )
-                outputs.append(str(summary))
-            return ExporterRunResult(
-                stats={"samples": len(ctx.dataset.samples)},
-                outputs=outputs,
-                meta={},
-            )
+class ExporterPlugin(BaseExporter):
+    OptionsModel = ExporterOptions
 
-    return X()
+    def __init__(self, opts: ExporterOptions):
+        super().__init__(opts)
+        self.opts = opts
+
+    def export_dataset(self, ctx):
+        ctx.mkdir(Path("images"))
+        outputs = []
+        if self.opts.write_summary:
+            summary = ctx.write_text(
+                Path("summary.txt"),
+                str(len(ctx.dataset.samples)),
+            )
+            outputs.append(str(summary))
+        return ExporterRunResult(
+            stats={"samples": len(ctx.dataset.samples)},
+            outputs=outputs,
+            meta={},
+        )
 """,
         encoding="utf-8",
     )

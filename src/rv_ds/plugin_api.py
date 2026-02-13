@@ -1,7 +1,8 @@
 import shutil
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
@@ -77,11 +78,25 @@ class ExporterRunResult:
     meta: dict[str, Any] = field(default_factory=dict)
 
 
-class Extractor(Protocol):
-    def extract_dataset(self, ctx: ExtractionContext) -> DatasetIR: ...
+class BaseExtractor(ABC):
+    OptionsModel: ClassVar[type[PluginOptions]] = PluginOptions
+
+    def __init__(self, opts: PluginOptions) -> None:
+        self.opts = opts
+
+    @abstractmethod
+    def extract_dataset(self, ctx: ExtractionContext) -> DatasetIR:
+        raise NotImplementedError
 
 
-class Exporter(Protocol):
+class BaseExporter(ABC):
+    OptionsModel: ClassVar[type[PluginOptions]] = PluginOptions
+
+    def __init__(self, opts: PluginOptions) -> None:
+        self.opts = opts
+
+    @abstractmethod
     def export_dataset(
         self, ctx: ExportContext
-    ) -> ExporterRunResult | dict[str, Any]: ...
+    ) -> ExporterRunResult | dict[str, Any]:
+        raise NotImplementedError

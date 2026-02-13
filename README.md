@@ -97,35 +97,43 @@ Matching rules:
 Extractor plugin file must expose:
 
 ```python
-from rv_ds.plugin_api import PluginOptions
+from rv_ds.plugin_api import BaseExtractor, PluginOptions
 
 
 class ExtractorOptions(PluginOptions):
     ...
 
 
-def build_extractor(opts: ExtractorOptions):
-    class ExtractorImpl:
-        def extract_dataset(self, ctx):
-            ...
-    return ExtractorImpl()
+class ExtractorPlugin(BaseExtractor):
+    OptionsModel = ExtractorOptions
+
+    def __init__(self, opts: ExtractorOptions):
+        super().__init__(opts)
+        self.opts = opts
+
+    def extract_dataset(self, ctx):
+        ...
 ```
 
 Exporter plugin file must expose:
 
 ```python
-from rv_ds.plugin_api import PluginOptions
+from rv_ds.plugin_api import BaseExporter, PluginOptions
 
 
 class ExporterOptions(PluginOptions):
     ...
 
 
-def build_exporter(opts: ExporterOptions):
-    class ExporterImpl:
-        def export_dataset(self, ctx):
-            ...
-    return ExporterImpl()
+class ExporterPlugin(BaseExporter):
+    OptionsModel = ExporterOptions
+
+    def __init__(self, opts: ExporterOptions):
+        super().__init__(opts)
+        self.opts = opts
+
+    def export_dataset(self, ctx):
+        ...
 ```
 
 See examples:

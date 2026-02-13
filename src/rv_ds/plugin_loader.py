@@ -2,23 +2,20 @@ import importlib.util
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable, cast
+from typing import Any, TypeVar, cast
 
 from pydantic import ValidationError
 
-
 from .errors import ValidationFailure
-from .plugin_api import Exporter, Extractor, PluginOptions
-from .plugins.exporters import DefaultYoloExporterOptions, build_default_yolo_exporter
+from .plugin_api import BaseExporter, BaseExtractor, PluginOptions
+from .plugins.exporters import DefaultYoloExporter
 from .plugins.extractors import (
-    DefaultExtractorOptions,
-    build_default_both_extractor,
-    build_default_detection_extractor,
-    build_default_segment_extractor,
+    DefaultBothExtractor,
+    DefaultDetectionExtractor,
+    DefaultSegmentExtractor,
 )
 
-ExtractorBuilder = Callable[[PluginOptions], Extractor]
-ExporterBuilder = Callable[[PluginOptions], Exporter]
+TPlugin = TypeVar("TPlugin", bound=BaseExtractor | BaseExporter)
 
 
 @dataclass(frozen=True)
@@ -27,111 +24,91 @@ class LoadedPlugin:
     source: str
 
 
-@dataclass(frozen=True)
-class BuiltinExtractorSpec:
-    options_model: type[PluginOptions]
-    builder: ExtractorBuilder
-
-
-@dataclass(frozen=True)
-class BuiltinExporterSpec:
-    options_model: type[PluginOptions]
-    builder: ExporterBuilder
-
-
-BUILTIN_EXTRACTORS: dict[str, BuiltinExtractorSpec] = {
-    "default-segment": BuiltinExtractorSpec(
-        options_model=DefaultExtractorOptions,
-        builder=cast(ExtractorBuilder, build_default_segment_extractor),
-    ),
-    "default-detection": BuiltinExtractorSpec(
-        options_model=DefaultExtractorOptions,
-        builder=cast(ExtractorBuilder, build_default_detection_extractor),
-    ),
-    "default-both": BuiltinExtractorSpec(
-        options_model=DefaultExtractorOptions,
-        builder=cast(ExtractorBuilder, build_default_both_extractor),
-    ),
+BUILTIN_EXTRACTORS: dict[str, type[BaseExtractor]] = {
+    "default-segment": DefaultSegmentExtractor,
+    "default-detection": DefaultDetectionExtractor,
+    "default-both": DefaultBothExtractor,
 }
 
-BUILTIN_EXPORTERS: dict[str, BuiltinExporterSpec] = {
-    "default-yolo": BuiltinExporterSpec(
-        options_model=DefaultYoloExporterOptions,
-        builder=cast(ExporterBuilder, build_default_yolo_exporter),
-    )
+BUILTIN_EXPORTERS: dict[str, type[BaseExporter]] = {
+    "default-yolo": DefaultYoloExporter,
 }
 
 
-def load_extractor(spec: str, opts: dict[str, Any]) -> tuple[Extractor, LoadedPlugin]:
+def load_extractor(spec: str, opts: dict[str, Any]) -> tuple[BaseExtractor, LoadedPlugin]:
     if spec in BUILTIN_EXTRACTORS:
-        builtin = BUILTIN_EXTRACTORS[spec]
-        validated_opts = _validate_options(
+        plugin_class = BUILTIN_EXTRACTORS[spec]
+        extractor = _instantiate_plugin(
+            plugin_class,
             opts,
-            builtin.options_model,
             plugin_type="extractor",
             plugin_name=spec,
         )
-        extractor = builtin.builder(validated_opts)
         return extractor, LoadedPlugin(name=spec, source="builtin")
 
     module = _load_module_from_path(spec)
-    options_model = _load_options_model(module, "ExtractorOptions")
-    builder = _load_symbol(module, "build_extractor")
-    validated_opts = _validate_options(
+    plugin_class = _load_plugin_class(module, "ExtractorPlugin", BaseExtractor)
+    extractor = _instantiate_plugin(
+        plugin_class,
         opts,
-        options_model,
         plugin_type="extractor",
         plugin_name=spec,
     )
-    extractor = cast(Extractor, builder(validated_opts))
-    if not hasattr(extractor, "extract_dataset"):
-        raise ValidationFailure(
-            f"extractor plugin '{spec}' did not return object with extract_dataset(ctx)"
-        )
     return extractor, LoadedPlugin(name=spec, source="path")
 
 
-def load_exporter(spec: str, opts: dict[str, Any]) -> tuple[Exporter, LoadedPlugin]:
+def load_exporter(spec: str, opts: dict[str, Any]) -> tuple[BaseExporter, LoadedPlugin]:
     if spec in BUILTIN_EXPORTERS:
-        builtin = BUILTIN_EXPORTERS[spec]
-        validated_opts = _validate_options(
+        plugin_class = BUILTIN_EXPORTERS[spec]
+        exporter = _instantiate_plugin(
+            plugin_class,
             opts,
-            builtin.options_model,
             plugin_type="exporter",
             plugin_name=spec,
         )
-        exporter = builtin.builder(validated_opts)
         return exporter, LoadedPlugin(name=spec, source="builtin")
 
     module = _load_module_from_path(spec)
-    options_model = _load_options_model(module, "ExporterOptions")
-    builder = _load_symbol(module, "build_exporter")
-    validated_opts = _validate_options(
+    plugin_class = _load_plugin_class(module, "ExporterPlugin", BaseExporter)
+    exporter = _instantiate_plugin(
+        plugin_class,
         opts,
-        options_model,
         plugin_type="exporter",
         plugin_name=spec,
     )
-    exporter = cast(Exporter, builder(validated_opts))
-    if not hasattr(exporter, "export_dataset"):
-        raise ValidationFailure(
-            f"exporter plugin '{spec}' did not return object with export_dataset(ctx)"
-        )
     return exporter, LoadedPlugin(name=spec, source="path")
 
 
-def _validate_options(
-    opts: dict[str, Any],
-    options_model: type[PluginOptions],
+def _instantiate_plugin(
+    plugin_class: type[TPlugin],
+    raw_opts: dict[str, Any],
     plugin_type: str,
     plugin_name: str,
-) -> PluginOptions:
+) -> TPlugin:
+    options_model = plugin_class.OptionsModel
+    if not issubclass(options_model, PluginOptions):
+        raise ValidationFailure(
+            f"{plugin_type} plugin '{plugin_name}' has invalid OptionsModel; must inherit PluginOptions"
+        )
+
     try:
-        return options_model.model_validate(opts)
+        validated_opts = options_model.model_validate(raw_opts)
     except ValidationError as exc:
         raise ValidationFailure(
             f"invalid {plugin_type} options for '{plugin_name}': {exc}"
         ) from exc
+
+    plugin = plugin_class(validated_opts)
+    if plugin_type == "extractor" and not hasattr(plugin, "extract_dataset"):
+        raise ValidationFailure(
+            f"extractor plugin '{plugin_name}' did not implement extract_dataset(ctx)"
+        )
+    if plugin_type == "exporter" and not hasattr(plugin, "export_dataset"):
+        raise ValidationFailure(
+            f"exporter plugin '{plugin_name}' did not implement export_dataset(ctx)"
+        )
+
+    return cast(TPlugin, plugin)
 
 
 def _load_module_from_path(spec: str) -> ModuleType:
@@ -155,10 +132,14 @@ def _load_module_from_path(spec: str) -> ModuleType:
     return module
 
 
-def _load_options_model(module: ModuleType, symbol: str) -> type[PluginOptions]:
+def _load_plugin_class(
+    module: ModuleType,
+    symbol: str,
+    expected_base: type[TPlugin],
+) -> type[TPlugin]:
     if not hasattr(module, symbol):
         raise ValidationFailure(
-            f"plugin '{module.__name__}' missing required options model '{symbol}'"
+            f"plugin '{module.__name__}' missing required class '{symbol}'"
         )
 
     candidate = getattr(module, symbol)
@@ -166,22 +147,10 @@ def _load_options_model(module: ModuleType, symbol: str) -> type[PluginOptions]:
         raise ValidationFailure(
             f"plugin '{module.__name__}' symbol '{symbol}' must be a class"
         )
-    if not issubclass(candidate, PluginOptions):
+    if not issubclass(candidate, expected_base):
+        base_name = expected_base.__name__
         raise ValidationFailure(
-            f"plugin '{module.__name__}' options model '{symbol}' must inherit PluginOptions"
+            f"plugin '{module.__name__}' class '{symbol}' must inherit {base_name}"
         )
 
-    return cast(type[PluginOptions], candidate)
-
-
-def _load_symbol(module: ModuleType, symbol: str) -> Callable[[PluginOptions], Any]:
-    if not hasattr(module, symbol):
-        raise ValidationFailure(
-            f"plugin '{module.__name__}' missing required function '{symbol}(opts)'"
-        )
-    candidate = getattr(module, symbol)
-    if not callable(candidate):
-        raise ValidationFailure(
-            f"plugin '{module.__name__}' symbol '{symbol}' is not callable"
-        )
-    return cast(Callable[[PluginOptions], Any], candidate)
+    return cast(type[TPlugin], candidate)
