@@ -70,10 +70,13 @@ def test_preview_bbox_exports_images_overlays_and_meta(tmp_path: Path) -> None:
     assert (result.export_dir / "images" / "s1.png").exists()
     assert (result.export_dir / "overlays" / "s1.png").exists()
 
-    meta = json.loads((result.export_dir / "preview_meta.json").read_text(encoding="utf-8"))
+    meta = json.loads(
+        (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
+    )
     assert meta["stats"]["exported_samples"] == 1
     assert meta["stats"]["drawn_samples"] == 1
     assert meta["stats"]["skipped_samples"] == 0
+    assert meta["fill_bbox"] is False
 
 
 def test_preview_seg_exports_polygon_overlay(tmp_path: Path) -> None:
@@ -98,11 +101,136 @@ def test_preview_seg_exports_polygon_overlay(tmp_path: Path) -> None:
     assert (result.export_dir / "images" / "s1.png").exists()
     assert (result.export_dir / "overlays" / "s1.png").exists()
 
-    meta = json.loads((result.export_dir / "preview_meta.json").read_text(encoding="utf-8"))
+    meta = json.loads(
+        (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
+    )
     assert meta["stats"]["drawn_samples"] == 1
+    assert meta["fill_bbox"] is False
 
 
-def test_preview_bbox_include_empty_false_skips_samples_without_boxes(tmp_path: Path) -> None:
+def test_preview_bbox_fill_disabled_by_default(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "s1", {2: ["sphere"]})
+
+    config = ExportConfig(
+        dataset_dir=dataset_dir,
+        output_dir=tmp_path / "exports",
+        image_file="Image.png",
+        extractor_spec="default-bbox",
+        extractor_opts=_default_detection_opts(),
+        exporter_spec="default-preview-bbox",
+        exporter_opts={},
+        fail_on_plugin_warning=False,
+        dump_ir=False,
+    )
+
+    result = run_export(config)
+    overlay = cv2.imread(
+        str(result.export_dir / "overlays" / "s1.png"), cv2.IMREAD_COLOR
+    )
+    assert overlay is not None
+
+    meta = json.loads(
+        (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
+    )
+    assert meta["fill_bbox"] is False
+    assert int(overlay[5, 5].sum()) == 0
+
+
+def test_preview_bbox_fill_enabled_fills_interior(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "s1", {2: ["sphere"]})
+
+    config = ExportConfig(
+        dataset_dir=dataset_dir,
+        output_dir=tmp_path / "exports",
+        image_file="Image.png",
+        extractor_spec="default-bbox",
+        extractor_opts=_default_detection_opts(),
+        exporter_spec="default-preview-bbox",
+        exporter_opts={"fill_bbox": True},
+        fail_on_plugin_warning=False,
+        dump_ir=False,
+    )
+
+    result = run_export(config)
+    overlay = cv2.imread(
+        str(result.export_dir / "overlays" / "s1.png"), cv2.IMREAD_COLOR
+    )
+    assert overlay is not None
+
+    meta = json.loads(
+        (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
+    )
+    assert meta["fill_bbox"] is True
+    assert int(overlay[5, 5].sum()) > 0
+
+
+def test_preview_seg_fill_enabled_by_default(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "s1", {2: ["sphere"]})
+
+    config = ExportConfig(
+        dataset_dir=dataset_dir,
+        output_dir=tmp_path / "exports",
+        image_file="Image.png",
+        extractor_spec="default-seg",
+        extractor_opts=_default_segment_opts(),
+        exporter_spec="default-preview-seg",
+        exporter_opts={},
+        fail_on_plugin_warning=False,
+        dump_ir=False,
+    )
+
+    result = run_export(config)
+    overlay = cv2.imread(
+        str(result.export_dir / "overlays" / "s1.png"), cv2.IMREAD_COLOR
+    )
+    assert overlay is not None
+
+    meta = json.loads(
+        (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
+    )
+    assert meta["fill_segment"] is True
+    assert int(overlay[5, 5].sum()) > 0
+
+
+def test_preview_seg_fill_segment_false_draws_border_only(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "s1", {2: ["sphere"]})
+
+    config = ExportConfig(
+        dataset_dir=dataset_dir,
+        output_dir=tmp_path / "exports",
+        image_file="Image.png",
+        extractor_spec="default-seg",
+        extractor_opts=_default_segment_opts(),
+        exporter_spec="default-preview-seg",
+        exporter_opts={"fill_segment": False},
+        fail_on_plugin_warning=False,
+        dump_ir=False,
+    )
+
+    result = run_export(config)
+    overlay = cv2.imread(
+        str(result.export_dir / "overlays" / "s1.png"), cv2.IMREAD_COLOR
+    )
+    assert overlay is not None
+
+    meta = json.loads(
+        (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
+    )
+    assert meta["fill_segment"] is False
+    assert int(overlay[5, 5].sum()) == 0
+
+
+def test_preview_bbox_include_empty_false_skips_samples_without_boxes(
+    tmp_path: Path,
+) -> None:
     dataset_dir = tmp_path / "dataset"
     dataset_dir.mkdir()
     _write_sample(dataset_dir, "s1", {2: ["sphere"]}, draw_mask_for=set())
@@ -124,7 +252,9 @@ def test_preview_bbox_include_empty_false_skips_samples_without_boxes(tmp_path: 
     assert not (result.export_dir / "images" / "s1.png").exists()
     assert not (result.export_dir / "overlays" / "s1.png").exists()
 
-    meta = json.loads((result.export_dir / "preview_meta.json").read_text(encoding="utf-8"))
+    meta = json.loads(
+        (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
+    )
     assert meta["stats"]["exported_samples"] == 0
     assert meta["stats"]["skipped_samples"] == 1
 
@@ -151,7 +281,9 @@ def test_preview_bbox_include_empty_true_keeps_empty_samples(tmp_path: Path) -> 
     assert (result.export_dir / "images" / "s1.png").exists()
     assert (result.export_dir / "overlays" / "s1.png").exists()
 
-    meta = json.loads((result.export_dir / "preview_meta.json").read_text(encoding="utf-8"))
+    meta = json.loads(
+        (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
+    )
     assert meta["stats"]["exported_samples"] == 1
     assert meta["stats"]["drawn_samples"] == 0
     assert meta["stats"]["skipped_samples"] == 0
@@ -215,7 +347,9 @@ def test_preview_bbox_seed_is_deterministic(tmp_path: Path) -> None:
             dump_ir=False,
         )
         res = run_export(cfg)
-        meta = json.loads((res.export_dir / "preview_meta.json").read_text(encoding="utf-8"))
+        meta = json.loads(
+            (res.export_dir / "preview_meta.json").read_text(encoding="utf-8")
+        )
         return meta["exported_sample_ids"]
 
     run_a = _run(123, "exports1")
@@ -226,7 +360,9 @@ def test_preview_bbox_seed_is_deterministic(tmp_path: Path) -> None:
     assert run_a != run_c
 
 
-def test_preview_bbox_include_empty_false_can_scan_past_max_samples(tmp_path: Path) -> None:
+def test_preview_bbox_include_empty_false_can_scan_past_max_samples(
+    tmp_path: Path,
+) -> None:
     dataset_dir = tmp_path / "dataset"
     dataset_dir.mkdir()
     for idx in range(8):
@@ -239,7 +375,11 @@ def test_preview_bbox_include_empty_false_can_scan_past_max_samples(tmp_path: Pa
         extractor_spec="default-bbox",
         extractor_opts={**_default_detection_opts(), "include_empty": True},
         exporter_spec="default-preview-bbox",
-        exporter_opts={"include_empty": False, "max_samples": 1, "_framework": {"random_seed": 5}},
+        exporter_opts={
+            "include_empty": False,
+            "max_samples": 1,
+            "_framework": {"random_seed": 5},
+        },
         fail_on_plugin_warning=False,
         dump_ir=False,
     )

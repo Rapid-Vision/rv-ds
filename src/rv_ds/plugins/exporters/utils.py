@@ -28,6 +28,9 @@ def draw_bbox(
     bbox: tuple[int, int, int, int] | None,
     color: tuple[int, int, int],
     label: str,
+    *,
+    fill: bool = False,
+    fill_alpha: float = 0.5,
 ) -> bool:
     if bbox is None:
         return False
@@ -41,6 +44,12 @@ def draw_bbox(
 
     if x1 <= x0 or y1 <= y0:
         return False
+
+    if fill:
+        overlay = image.copy()
+        cv2.rectangle(overlay, (x0, y0), (x1, y1), color, thickness=-1)
+        alpha = float(max(0.0, min(fill_alpha, 1.0)))
+        cv2.addWeighted(overlay, alpha, image, 1.0 - alpha, 0.0, dst=image)
 
     cv2.rectangle(image, (x0, y0), (x1, y1), color, 2)
     cv2.putText(
@@ -63,6 +72,9 @@ def draw_polygon(
     height: int,
     color: tuple[int, int, int],
     label: str,
+    *,
+    fill: bool = False,
+    fill_alpha: float = 0.5,
 ) -> bool:
     if polygon_norm is None or len(polygon_norm) < 3:
         return False
@@ -76,6 +88,11 @@ def draw_polygon(
         points.append((x, y))
 
     pts = np.array(points, dtype=np.int32).reshape((-1, 1, 2))
+    if fill:
+        overlay = image.copy()
+        cv2.fillPoly(overlay, [pts], color)
+        alpha = float(max(0.0, min(fill_alpha, 1.0)))
+        cv2.addWeighted(overlay, alpha, image, 1.0 - alpha, 0.0, dst=image)
     cv2.polylines(image, [pts], isClosed=True, color=color, thickness=2)
 
     x0, y0 = points[0]

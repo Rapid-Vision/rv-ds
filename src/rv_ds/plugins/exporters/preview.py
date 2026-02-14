@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import cast
 
 import cv2
 from pydantic import Field
@@ -12,6 +13,7 @@ from .utils import class_color, class_label, draw_bbox, draw_polygon
 class _PreviewBaseOptions(PluginOptions):
     include_empty: bool = True
     max_samples: int | None = Field(default=None, ge=1)
+    fill_bbox: bool = False
 
 
 class DefaultPreviewBBoxExporterOptions(_PreviewBaseOptions):
@@ -19,7 +21,7 @@ class DefaultPreviewBBoxExporterOptions(_PreviewBaseOptions):
 
 
 class DefaultPreviewSegExporterOptions(_PreviewBaseOptions):
-    pass
+    fill_segment: bool = True
 
 
 class _PreviewOverlayBase(BaseExporter[_PreviewBaseOptions]):
@@ -65,9 +67,17 @@ class _PreviewOverlayBase(BaseExporter[_PreviewBaseOptions]):
                 label = class_label(inst.class_name, inst.class_id)
 
                 if self.mode == "bbox":
-                    if draw_bbox(overlay, inst.bbox_xyxy, color, label):
+                    if draw_bbox(
+                        overlay,
+                        inst.bbox_xyxy,
+                        color,
+                        label,
+                        fill=self.opts.fill_bbox,
+                        fill_alpha=0.5,
+                    ):
                         drawable = True
                 else:
+                    fill_segment = getattr(self.opts, "fill_segment", True)
                     drawn_seg = draw_polygon(
                         overlay,
                         inst.polygon_norm,
@@ -75,11 +85,18 @@ class _PreviewOverlayBase(BaseExporter[_PreviewBaseOptions]):
                         sample.height,
                         color,
                         label,
+                        fill=fill_segment,
+                        fill_alpha=0.5,
                     )
                     if drawn_seg:
                         drawable = True
                     elif self.fallback_to_bbox and draw_bbox(
-                        overlay, inst.bbox_xyxy, color, label
+                        overlay,
+                        inst.bbox_xyxy,
+                        color,
+                        label,
+                        fill=self.opts.fill_bbox,
+                        fill_alpha=0.5,
                     ):
                         drawable = True
 
@@ -101,6 +118,7 @@ class _PreviewOverlayBase(BaseExporter[_PreviewBaseOptions]):
             "exporter": f"default-preview-{self.mode}",
             "include_empty": include_empty,
             "max_samples": self.opts.max_samples,
+            "fill_bbox": self.opts.fill_bbox,
             "class_names": ctx.dataset_info.class_names,
             "stats": {
                 "exported_samples": exported_samples,
@@ -109,10 +127,28 @@ class _PreviewOverlayBase(BaseExporter[_PreviewBaseOptions]):
             },
             "exported_sample_ids": exported_sample_ids,
         }
+        if self.mode == "seg":
+            preview_meta["fill_segment"] = cast(
+                bool, getattr(self.opts, "fill_segment", True)
+            )
         meta_path = ctx.write_text(
             Path("preview_meta.json"),
             json.dumps(preview_meta, indent=2),
         )
+
+        result_meta = {
+            "exporter": f"default-preview-{self.mode}",
+            "include_empty": include_empty,
+            "max_samples": self.opts.max_samples,
+            "fill_bbox": self.opts.fill_bbox,
+            "class_names": ctx.dataset_info.class_names,
+            "preview_meta": str(meta_path),
+            "exported_sample_ids": exported_sample_ids,
+        }
+        if self.mode == "seg":
+            result_meta["fill_segment"] = cast(
+                bool, getattr(self.opts, "fill_segment", True)
+            )
 
         return ExporterRunResult(
             stats={
@@ -121,14 +157,7 @@ class _PreviewOverlayBase(BaseExporter[_PreviewBaseOptions]):
                 "skipped_samples": skipped_samples,
             },
             outputs=[str(path) for path in ctx.outputs],
-            meta={
-                "exporter": f"default-preview-{self.mode}",
-                "include_empty": include_empty,
-                "max_samples": self.opts.max_samples,
-                "class_names": ctx.dataset_info.class_names,
-                "preview_meta": str(meta_path),
-                "exported_sample_ids": exported_sample_ids,
-            },
+            meta=result_meta,
         )
 
 
