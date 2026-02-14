@@ -1,7 +1,7 @@
 [project]
 name = "rv-ds"
 version = "0.1.0"
-description = "Export RV intermediate renders into YOLO datasets without re-rendering"
+description = "Export RV datasets into target dataset formats"
 readme = "README.md"
 authors = [{ name = "Mikhail Pankin", email = "mishapankin@gmail.com" }]
 requires-python = ">=3.12"
