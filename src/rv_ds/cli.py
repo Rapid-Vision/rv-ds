@@ -59,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser = subparsers.add_parser(
         "export", help="Export a dataset using a YAML config"
     )
-    export_parser.add_argument("--config", required=True, type=Path)
+    export_parser.add_argument("--config", "-c", required=True, type=Path)
     export_parser.add_argument(
         "--dry-run", action="store_true", help="Validate without exporting"
     )
@@ -67,7 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser = subparsers.add_parser(
         "validate", help="Validate a YAML config and dataset"
     )
-    validate_parser.add_argument("--config", required=True, type=Path)
+    validate_parser.add_argument("--config", "-c", required=True, type=Path)
 
     subparsers.add_parser("list", help="List supported tasks, outputs, and presets")
     return parser
@@ -375,13 +375,14 @@ def _prompt_choice(prompt: str, options: list[tuple[str, str]], default: str) ->
 
 
 def _prompt_output_format(task: str) -> str:
-    options = [("1", "preview")]
+    formats = ["preview"]
     if task in {"detection", "both"}:
-        options.append(("2", "yolo_bbox"))
+        formats.append("yolo_bbox")
     if task in {"segmentation", "both"}:
-        options.append(("3", "yolo_seg"))
+        formats.append("yolo_seg")
 
-    default = "3" if any(key == "3" for key, _ in options) else "2"
+    options = [(str(index), value) for index, value in enumerate(formats, start=1)]
+    default = str(len(options))
     return _prompt_choice("Select output format", options, default=default)
 
 
