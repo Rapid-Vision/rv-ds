@@ -17,3 +17,7 @@ wheels/
 .local/
 .tmp/
 tmp/
+
+exports/
+
+.DS_Store

@@ -14,7 +14,8 @@ from .plugins.exporters.preview import (
     DefaultPreviewSegExporter,
 )
 from .plugins.exporters.yolo import (
-    DefaultYoloExporter,
+    DefaultYoloBBoxExporter,
+    DefaultYoloSegExporter,
 )
 from .plugins.extractors.seg_bbox import (
     DefaultBothExtractor,
@@ -43,7 +44,8 @@ BUILTIN_EXTRACTORS: dict[str, type[ExtractorType]] = {
 }
 
 BUILTIN_EXPORTERS: dict[str, type[ExporterType]] = {
-    "default-yolo-seg": DefaultYoloExporter,
+    "default-yolo-bbox": DefaultYoloBBoxExporter,
+    "default-yolo-seg": DefaultYoloSegExporter,
     "default-preview-bbox": DefaultPreviewBBoxExporter,
     "default-preview-seg": DefaultPreviewSegExporter,
 }

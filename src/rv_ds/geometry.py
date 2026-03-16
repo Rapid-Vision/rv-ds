@@ -34,7 +34,8 @@ def normalize_bbox(
 
 
 def largest_polygon_from_mask(
-    mask: np.ndarray, epsilon_ratio: float = 0.002
+    mask: np.ndarray,
+    epsilon_ratio: float = 0.002,
 ) -> list[tuple[float, float]] | None:
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:

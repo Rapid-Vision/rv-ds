@@ -1,8 +1,9 @@
 from .preview import DefaultPreviewBBoxExporter, DefaultPreviewSegExporter
-from .yolo import DefaultYoloExporter
+from .yolo import DefaultYoloBBoxExporter, DefaultYoloSegExporter
 
 __all__ = [
     "DefaultPreviewBBoxExporter",
     "DefaultPreviewSegExporter",
-    "DefaultYoloExporter",
+    "DefaultYoloBBoxExporter",
+    "DefaultYoloSegExporter",
 ]

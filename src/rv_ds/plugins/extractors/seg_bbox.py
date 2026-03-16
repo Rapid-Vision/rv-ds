@@ -72,7 +72,10 @@ class DefaultExtractorOptions(PluginOptions):
     require_tags: list[str] | str = Field(default_factory=list)
     exclude_tags: list[str] | str = Field(default_factory=list)
     include_empty: bool = False
+    include_unmapped: bool = False
+    unmapped_class_name: str = "unmapped"
     epsilon_ratio: float = 0.002
+    min_segment_area: float = 0.0
 
     @field_validator("target_tags", "require_tags", "exclude_tags", mode="before")
     @classmethod
@@ -104,6 +107,21 @@ class DefaultExtractorOptions(PluginOptions):
             raise ValueError("epsilon_ratio must be a non-negative number")
         return value
 
+    @field_validator("min_segment_area")
+    @classmethod
+    def _validate_min_segment_area(cls, value: float) -> float:
+        if value < 0.0 or value > 1.0:
+            raise ValueError("min_segment_area must be between 0.0 and 1.0")
+        return value
+
+    @field_validator("unmapped_class_name")
+    @classmethod
+    def _validate_unmapped_class_name(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("unmapped_class_name must be a non-empty string")
+        return stripped
+
     @model_validator(mode="after")
     def _validate_class_mapping(self) -> "DefaultExtractorOptions":
         if not self.class_mapping:
@@ -120,6 +138,11 @@ class DefaultExtractorOptions(PluginOptions):
             joined = ", ".join(sorted(duplicates))
             raise ValueError(f"class_mapping contains duplicate class name(s): {joined}")
 
+        if self.include_unmapped and self.unmapped_class_name in seen:
+            raise ValueError(
+                "unmapped_class_name must not duplicate a configured class_mapping name"
+            )
+
         return self
 
 
@@ -135,6 +158,8 @@ class DefaultExtractor(BaseExtractor[DefaultExtractorOptions]):
     def describe_dataset(self, ctx: ExtractionContext) -> ExtractorDatasetInfo:
         _ = ctx
         class_names = [rule.class_name for rule in self.opts.class_mapping]
+        if self.opts.include_unmapped:
+            class_names.append(self.opts.unmapped_class_name)
         return ExtractorDatasetInfo(
             class_names=class_names,
             meta={"extractor": "default", "mode": self.mode},
@@ -155,6 +180,13 @@ class DefaultExtractor(BaseExtractor[DefaultExtractorOptions]):
             if not object_passes_target_tags(obj, target_tags):
                 continue
             class_id, class_name = _resolve_class(obj.tags, self.opts.class_mapping)
+            if (
+                class_id is None
+                and class_name is None
+                and self.opts.include_unmapped
+            ):
+                class_id = len(self.opts.class_mapping)
+                class_name = self.opts.unmapped_class_name
             if class_id is None or class_name is None:
                 continue
             selected.append((obj, class_id, class_name))
@@ -163,6 +195,7 @@ class DefaultExtractor(BaseExtractor[DefaultExtractorOptions]):
             return None
 
         index_map = read_index_map(sample.index_path)
+        image_area = index_map.shape[0] * index_map.shape[1]
         instances: list[InstanceRecord] = []
 
         for obj, class_id, class_name in selected:
@@ -183,9 +216,12 @@ class DefaultExtractor(BaseExtractor[DefaultExtractorOptions]):
                     )
 
             if self.mode in ("segment", "both"):
-                polygon_norm = extract_largest_polygon(
-                    mask, epsilon_ratio=self.opts.epsilon_ratio
-                )
+                area_ratio = float(area_px) / float(image_area)
+                if area_ratio >= self.opts.min_segment_area:
+                    polygon_norm = extract_largest_polygon(
+                        mask,
+                        epsilon_ratio=self.opts.epsilon_ratio,
+                    )
 
             if bbox_xyxy is None and polygon_norm is None:
                 continue

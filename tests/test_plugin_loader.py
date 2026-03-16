@@ -24,6 +24,43 @@ def test_load_builtin_plugins() -> None:
     assert exp_info.source == "builtin"
 
 
+def test_load_builtin_yolo_exporters_use_default_splits() -> None:
+    seg_exporter, _ = load_exporter("default-yolo-seg", {})
+    bbox_exporter, _ = load_exporter("default-yolo-bbox", {})
+
+    assert seg_exporter.opts.splits == {"train": 0.8, "val": 0.2}
+    assert bbox_exporter.opts.splits == {"train": 0.8, "val": 0.2}
+
+
+def test_load_builtin_yolo_exporter_rejects_invalid_splits() -> None:
+    with pytest.raises(ValidationFailure, match="must include train and val"):
+        load_exporter("default-yolo-seg", {"splits": {"train": 1.0}})
+    with pytest.raises(ValidationFailure, match="must include train and val"):
+        load_exporter("default-yolo-bbox", {"splits": {"train": 1.0}})
+
+    with pytest.raises(ValidationFailure, match="sum to 1.0"):
+        load_exporter(
+            "default-yolo-seg",
+            {"splits": {"train": 0.7, "val": 0.2, "test": 0.2}},
+        )
+    with pytest.raises(ValidationFailure, match="sum to 1.0"):
+        load_exporter(
+            "default-yolo-bbox",
+            {"splits": {"train": 0.7, "val": 0.2, "test": 0.2}},
+        )
+
+
+def test_load_builtin_segment_extractor_rejects_invalid_min_segment_area() -> None:
+    with pytest.raises(ValidationFailure, match="min_segment_area"):
+        load_extractor(
+            "default-seg",
+            {
+                "class_mapping": [{"class": "sphere", "required_tags": ["sphere"]}],
+                "min_segment_area": 1.1,
+            },
+        )
+
+
 def test_load_path_extractor_plugin(tmp_path: Path) -> None:
     plugin = tmp_path / "extractor.py"
     plugin.write_text(

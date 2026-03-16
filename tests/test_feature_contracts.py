@@ -55,6 +55,17 @@ def test_builtin_feature_contract_compatible_pairs(tmp_path: Path) -> None:
         ),
         ExportConfig(
             dataset_dir=dataset_dir,
+            output_dir=tmp_path / "out1_bbox",
+            image_file="Image.png",
+            extractor_spec="default-bbox",
+            extractor_opts=_bbox_opts(),
+            exporter_spec="default-yolo-bbox",
+            exporter_opts={},
+            fail_on_plugin_warning=False,
+            dump_ir=False,
+        ),
+        ExportConfig(
+            dataset_dir=dataset_dir,
             output_dir=tmp_path / "out2",
             image_file="Image.png",
             extractor_spec="default-bbox",
@@ -100,6 +111,21 @@ def test_builtin_feature_contract_mismatch_fails(tmp_path: Path) -> None:
     )
 
     with pytest.raises(ValidationFailure, match="instance_segment"):
+        run_export(cfg)
+
+    cfg = ExportConfig(
+        dataset_dir=dataset_dir,
+        output_dir=tmp_path / "out_bbox",
+        image_file="Image.png",
+        extractor_spec="default-seg",
+        extractor_opts=_seg_opts(),
+        exporter_spec="default-yolo-bbox",
+        exporter_opts={},
+        fail_on_plugin_warning=False,
+        dump_ir=False,
+    )
+
+    with pytest.raises(ValidationFailure, match="instance_bbox"):
         run_export(cfg)
 
 

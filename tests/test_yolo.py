@@ -22,3 +22,22 @@ def test_write_data_yaml(tmp_path: Path) -> None:
 
     parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert parsed == {"path": ".", "train": "images", "names": ["cube", "sphere"]}
+
+
+def test_write_data_yaml_with_splits(tmp_path: Path) -> None:
+    path = tmp_path / "data.yaml"
+
+    write_data_yaml(
+        path,
+        ["cube", "sphere"],
+        splits={"train": "train/images", "val": "val/images", "test": "test/images"},
+    )
+
+    parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert parsed == {
+        "path": ".",
+        "train": "train/images",
+        "val": "val/images",
+        "test": "test/images",
+        "names": ["cube", "sphere"],
+    }

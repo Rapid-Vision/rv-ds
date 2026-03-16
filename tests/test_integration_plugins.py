@@ -6,6 +6,7 @@ import numpy as np
 import yaml
 
 from rv_ds.pipeline import ExportConfig, run_export
+from rv_ds.plugins.extractors.seg_bbox import DefaultExtractorOptions
 
 
 def _write_sample(
@@ -171,12 +172,15 @@ def test_builtin_extractor_and_exporter(tmp_path: Path) -> None:
 
     result = run_export(config)
 
-    label = result.export_dir / "labels" / "s1.txt"
+    label = result.export_dir / "train" / "labels" / "s1.txt"
     assert label.exists()
     data_yaml = yaml.safe_load(
         (result.export_dir / "data.yaml").read_text(encoding="utf-8")
     )
     assert data_yaml["names"] == ["sphere"]
+    assert data_yaml["train"] == "train/images"
+    assert data_yaml["val"] == "val/images"
+    assert len(label.read_text(encoding="utf-8").strip().split()) > 5
 
 
 def test_custom_extractor_builtin_exporter(tmp_path: Path) -> None:
@@ -193,14 +197,16 @@ def test_custom_extractor_builtin_exporter(tmp_path: Path) -> None:
         image_file="Image.png",
         extractor_spec=str(extractor),
         extractor_opts={},
-        exporter_spec="default-yolo-seg",
+        exporter_spec="default-yolo-bbox",
         exporter_opts={},
         fail_on_plugin_warning=False,
         dump_ir=False,
     )
 
     result = run_export(config)
-    assert (result.export_dir / "labels" / "s1.txt").exists()
+    label = result.export_dir / "train" / "labels" / "s1.txt"
+    assert label.exists()
+    assert len(label.read_text(encoding="utf-8").strip().split()) == 5
 
 
 def test_builtin_extractor_custom_exporter(tmp_path: Path) -> None:
@@ -254,3 +260,121 @@ def test_custom_extractor_custom_exporter(tmp_path: Path) -> None:
     result = run_export(config)
     assert (result.export_dir / "summary.txt").exists()
     assert (result.export_dir / "ir_dump.json").exists()
+
+
+def test_builtin_yolo_exporter_supports_train_val_test_split(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    for idx in range(1, 6):
+        _write_sample(dataset_dir, f"s{idx}", {2: ["sphere"]})
+
+    config = ExportConfig(
+        dataset_dir=dataset_dir,
+        output_dir=tmp_path / "exports",
+        image_file="Image.png",
+        extractor_spec="default-bbox",
+        extractor_opts={
+            "class_mapping": [{"class": "sphere", "required_tags": ["sphere"]}]
+        },
+        exporter_spec="default-yolo-bbox",
+        exporter_opts={
+            "splits": {"train": 0.6, "val": 0.2, "test": 0.2},
+            "_framework": {"random_seed": 7},
+        },
+        fail_on_plugin_warning=False,
+        dump_ir=False,
+    )
+
+    result = run_export(config)
+    data_yaml = yaml.safe_load(
+        (result.export_dir / "data.yaml").read_text(encoding="utf-8")
+    )
+
+    assert data_yaml["train"] == "train/images"
+    assert data_yaml["val"] == "val/images"
+    assert data_yaml["test"] == "test/images"
+    assert len(list((result.export_dir / "train" / "labels").glob("*.txt"))) == 3
+    assert len(list((result.export_dir / "val" / "labels").glob("*.txt"))) == 1
+    assert len(list((result.export_dir / "test" / "labels").glob("*.txt"))) == 1
+
+
+def test_builtin_yolo_exporter_split_assignment_is_deterministic(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    for idx in range(1, 6):
+        _write_sample(dataset_dir, f"s{idx}", {2: ["sphere"]})
+
+    base_config = dict(
+        dataset_dir=dataset_dir,
+        image_file="Image.png",
+        extractor_spec="default-bbox",
+        extractor_opts={
+            "class_mapping": [{"class": "sphere", "required_tags": ["sphere"]}]
+        },
+        exporter_spec="default-yolo-bbox",
+        exporter_opts={"_framework": {"random_seed": 11}},
+        fail_on_plugin_warning=False,
+        dump_ir=False,
+    )
+
+    first = run_export(
+        ExportConfig(output_dir=tmp_path / "exports1", **base_config)
+    )
+    second = run_export(
+        ExportConfig(output_dir=tmp_path / "exports2", **base_config)
+    )
+
+    def _labels_by_split(root: Path) -> dict[str, list[str]]:
+        return {
+            split: sorted(path.stem for path in (root / split / "labels").glob("*.txt"))
+            for split in ("train", "val")
+        }
+
+    assert _labels_by_split(first.export_dir) == _labels_by_split(second.export_dir)
+
+
+def test_min_segment_area_drops_small_segments(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "s1", {2: ["sphere"]})
+
+    default_opts = DefaultExtractorOptions(
+        class_mapping=[{"class": "sphere", "required_tags": ["sphere"]}]
+    )
+    default_config = ExportConfig(
+        dataset_dir=dataset_dir,
+        output_dir=tmp_path / "exports-default",
+        image_file="Image.png",
+        extractor_spec="default-seg",
+        extractor_opts=default_opts.model_dump(mode="json", by_alias=True),
+        exporter_spec="default-yolo-seg",
+        exporter_opts={},
+        fail_on_plugin_warning=False,
+        dump_ir=False,
+    )
+
+    dropped_opts = DefaultExtractorOptions(
+        class_mapping=[{"class": "sphere", "required_tags": ["sphere"]}],
+        min_segment_area=0.2,
+        include_empty=True,
+    )
+    dropped_config = ExportConfig(
+        dataset_dir=dataset_dir,
+        output_dir=tmp_path / "exports-dropped",
+        image_file="Image.png",
+        extractor_spec="default-seg",
+        extractor_opts=dropped_opts.model_dump(mode="json", by_alias=True),
+        exporter_spec="default-yolo-seg",
+        exporter_opts={"include_empty": True},
+        fail_on_plugin_warning=False,
+        dump_ir=False,
+    )
+
+    default_result = run_export(default_config)
+    dropped_result = run_export(dropped_config)
+
+    default_label = default_result.export_dir / "train" / "labels" / "s1.txt"
+    dropped_label = dropped_result.export_dir / "train" / "labels" / "s1.txt"
+
+    assert default_label.read_text(encoding="utf-8").strip()
+    assert dropped_label.read_text(encoding="utf-8") == ""

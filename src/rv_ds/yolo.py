@@ -13,10 +13,17 @@ def format_segment_line(class_id: int, polygon: list[tuple[float, float]]) -> st
     return f"{class_id} {coords}"
 
 
-def write_data_yaml(path: Path, class_names: list[str]) -> None:
+def write_data_yaml(
+    path: Path,
+    class_names: list[str],
+    splits: dict[str, str] | None = None,
+) -> None:
     payload = {
         "path": ".",
-        "train": "images",
         "names": class_names,
     }
+    if splits is None:
+        payload["train"] = "images"
+    else:
+        payload.update(splits)
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")

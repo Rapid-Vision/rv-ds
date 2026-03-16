@@ -11,7 +11,8 @@ def extract_bbox(mask: np.ndarray) -> tuple[int, int, int, int] | None:
 
 
 def extract_largest_polygon(
-    mask: np.ndarray, epsilon_ratio: float = 0.002
+    mask: np.ndarray,
+    epsilon_ratio: float = 0.002,
 ) -> list[tuple[float, float]] | None:
     return largest_polygon_from_mask(mask, epsilon_ratio=epsilon_ratio)
 
