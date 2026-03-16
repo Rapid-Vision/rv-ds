@@ -17,6 +17,7 @@ exporter:
   spec: default-preview-bbox
   options:
     include_empty: true
+    compare_original: true
 
 debug:
   dump_ir: false

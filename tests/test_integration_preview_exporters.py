@@ -48,7 +48,7 @@ def _default_segment_opts() -> dict:
     return {"class_mapping": [{"class": "sphere", "required_tags": ["sphere"]}]}
 
 
-def test_preview_bbox_exports_images_overlays_and_meta(tmp_path: Path) -> None:
+def test_preview_bbox_exports_overlays_and_meta(tmp_path: Path) -> None:
     dataset_dir = tmp_path / "dataset"
     dataset_dir.mkdir()
     _write_sample(dataset_dir, "s1", {2: ["sphere"]})
@@ -67,7 +67,7 @@ def test_preview_bbox_exports_images_overlays_and_meta(tmp_path: Path) -> None:
 
     result = run_export(config)
 
-    assert (result.export_dir / "images" / "s1.png").exists()
+    assert not (result.export_dir / "images" / "s1.png").exists()
     assert (result.export_dir / "overlays" / "s1.png").exists()
 
     meta = json.loads(
@@ -77,6 +77,7 @@ def test_preview_bbox_exports_images_overlays_and_meta(tmp_path: Path) -> None:
     assert meta["stats"]["drawn_samples"] == 1
     assert meta["stats"]["skipped_samples"] == 0
     assert meta["fill_bbox"] is False
+    assert meta["compare_original"] is True
 
 
 def test_preview_seg_exports_polygon_overlay(tmp_path: Path) -> None:
@@ -98,7 +99,7 @@ def test_preview_seg_exports_polygon_overlay(tmp_path: Path) -> None:
 
     result = run_export(config)
 
-    assert (result.export_dir / "images" / "s1.png").exists()
+    assert not (result.export_dir / "images" / "s1.png").exists()
     assert (result.export_dir / "overlays" / "s1.png").exists()
 
     meta = json.loads(
@@ -106,6 +107,7 @@ def test_preview_seg_exports_polygon_overlay(tmp_path: Path) -> None:
     )
     assert meta["stats"]["drawn_samples"] == 1
     assert meta["fill_bbox"] is False
+    assert meta["compare_original"] is True
 
 
 def test_preview_bbox_fill_disabled_by_default(tmp_path: Path) -> None:
@@ -120,7 +122,7 @@ def test_preview_bbox_fill_disabled_by_default(tmp_path: Path) -> None:
         extractor_spec="default-bbox",
         extractor_opts=_default_detection_opts(),
         exporter_spec="default-preview-bbox",
-        exporter_opts={},
+        exporter_opts={"compare_original": False},
         fail_on_plugin_warning=False,
         dump_ir=False,
     )
@@ -135,6 +137,7 @@ def test_preview_bbox_fill_disabled_by_default(tmp_path: Path) -> None:
         (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
     )
     assert meta["fill_bbox"] is False
+    assert meta["compare_original"] is False
     assert int(overlay[5, 5].sum()) == 0
 
 
@@ -150,7 +153,7 @@ def test_preview_bbox_fill_enabled_fills_interior(tmp_path: Path) -> None:
         extractor_spec="default-bbox",
         extractor_opts=_default_detection_opts(),
         exporter_spec="default-preview-bbox",
-        exporter_opts={"fill_bbox": True},
+        exporter_opts={"fill_bbox": True, "compare_original": False},
         fail_on_plugin_warning=False,
         dump_ir=False,
     )
@@ -165,6 +168,7 @@ def test_preview_bbox_fill_enabled_fills_interior(tmp_path: Path) -> None:
         (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
     )
     assert meta["fill_bbox"] is True
+    assert meta["compare_original"] is False
     assert int(overlay[5, 5].sum()) > 0
 
 
@@ -180,7 +184,7 @@ def test_preview_seg_fill_enabled_by_default(tmp_path: Path) -> None:
         extractor_spec="default-seg",
         extractor_opts=_default_segment_opts(),
         exporter_spec="default-preview-seg",
-        exporter_opts={},
+        exporter_opts={"compare_original": False},
         fail_on_plugin_warning=False,
         dump_ir=False,
     )
@@ -195,6 +199,7 @@ def test_preview_seg_fill_enabled_by_default(tmp_path: Path) -> None:
         (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
     )
     assert meta["fill_segment"] is True
+    assert meta["compare_original"] is False
     assert int(overlay[5, 5].sum()) > 0
 
 
@@ -210,7 +215,7 @@ def test_preview_seg_fill_segment_false_draws_border_only(tmp_path: Path) -> Non
         extractor_spec="default-seg",
         extractor_opts=_default_segment_opts(),
         exporter_spec="default-preview-seg",
-        exporter_opts={"fill_segment": False},
+        exporter_opts={"fill_segment": False, "compare_original": False},
         fail_on_plugin_warning=False,
         dump_ir=False,
     )
@@ -225,6 +230,7 @@ def test_preview_seg_fill_segment_false_draws_border_only(tmp_path: Path) -> Non
         (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
     )
     assert meta["fill_segment"] is False
+    assert meta["compare_original"] is False
     assert int(overlay[5, 5].sum()) == 0
 
 
@@ -278,7 +284,7 @@ def test_preview_bbox_include_empty_true_keeps_empty_samples(tmp_path: Path) -> 
 
     result = run_export(config)
 
-    assert (result.export_dir / "images" / "s1.png").exists()
+    assert not (result.export_dir / "images" / "s1.png").exists()
     assert (result.export_dir / "overlays" / "s1.png").exists()
 
     meta = json.loads(
@@ -295,6 +301,38 @@ def test_preview_exporters_are_registered() -> None:
 
     assert hasattr(bbox_exporter, "export_dataset")
     assert hasattr(seg_exporter, "export_dataset")
+    assert bbox_exporter.opts.compare_original is True
+    assert seg_exporter.opts.compare_original is True
+
+
+def test_preview_compare_original_true_concatenates_source_and_overlay(
+    tmp_path: Path,
+) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "s1", {2: ["sphere"]})
+
+    config = ExportConfig(
+        dataset_dir=dataset_dir,
+        output_dir=tmp_path / "exports",
+        image_file="Image.png",
+        extractor_spec="default-bbox",
+        extractor_opts=_default_detection_opts(),
+        exporter_spec="default-preview-bbox",
+        exporter_opts={"compare_original": True},
+        fail_on_plugin_warning=False,
+        dump_ir=False,
+    )
+
+    result = run_export(config)
+    overlay = cv2.imread(
+        str(result.export_dir / "overlays" / "s1.png"), cv2.IMREAD_COLOR
+    )
+    assert overlay is not None
+    assert overlay.shape[:2] == (16, 33)
+    assert int(overlay[5, 5].sum()) == 0
+    assert int(overlay[5, 16].sum()) == 0
+    assert int(overlay[5, 17 + 2].sum()) > 0
 
 
 def test_preview_bbox_max_samples_limits_outputs(tmp_path: Path) -> None:

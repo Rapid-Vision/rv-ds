@@ -407,7 +407,9 @@ def _build_builtin_exporter_options(
     output_format: str, include_empty: bool
 ) -> dict[str, object]:
     options: dict[str, object] = {"include_empty": include_empty}
-    if output_format != "preview":
+    if output_format == "preview":
+        options["compare_original"] = True
+    else:
         options["splits"] = {"train": 0.8, "val": 0.2}
     return options
 

@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from typing import cast
+import numpy as np
 
 import cv2
 from pydantic import Field
@@ -14,6 +15,7 @@ class _PreviewBaseOptions(PluginOptions):
     include_empty: bool = True
     max_samples: int | None = Field(default=None, ge=1)
     fill_bbox: bool = False
+    compare_original: bool = True
 
 
 class DefaultPreviewBBoxExporterOptions(_PreviewBaseOptions):
@@ -31,7 +33,6 @@ class _PreviewOverlayBase(BaseExporter[_PreviewBaseOptions]):
     def _build_preview(
         self, ctx: ExportContext, include_empty: bool
     ) -> ExporterRunResult:
-        images_dir = ctx.mkdir(Path("images"))
         overlays_dir = ctx.mkdir(Path("overlays"))
 
         exported_samples = 0
@@ -57,6 +58,7 @@ class _PreviewOverlayBase(BaseExporter[_PreviewBaseOptions]):
                 ctx.warn(f"failed to read image for preview: '{source}'")
                 skipped_samples += 1
                 continue
+            original = overlay.copy()
 
             drawable = False
             for inst in sample.instances:
@@ -104,9 +106,13 @@ class _PreviewOverlayBase(BaseExporter[_PreviewBaseOptions]):
                 skipped_samples += 1
                 continue
 
-            ctx.copy_image(source, images_dir / sample.image_out_name)
             overlay_path = ctx.safe_path(overlays_dir / sample.image_out_name)
-            cv2.imwrite(str(overlay_path), overlay)
+            rendered = (
+                cv2.hconcat([original, np.zeros_like(original[:, :1]), overlay])
+                if self.opts.compare_original
+                else overlay
+            )
+            cv2.imwrite(str(overlay_path), rendered)
             ctx.add_output(overlay_path)
 
             exported_samples += 1
@@ -119,6 +125,7 @@ class _PreviewOverlayBase(BaseExporter[_PreviewBaseOptions]):
             "include_empty": include_empty,
             "max_samples": self.opts.max_samples,
             "fill_bbox": self.opts.fill_bbox,
+            "compare_original": self.opts.compare_original,
             "class_names": ctx.dataset_info.class_names,
             "stats": {
                 "exported_samples": exported_samples,
@@ -141,6 +148,7 @@ class _PreviewOverlayBase(BaseExporter[_PreviewBaseOptions]):
             "include_empty": include_empty,
             "max_samples": self.opts.max_samples,
             "fill_bbox": self.opts.fill_bbox,
+            "compare_original": self.opts.compare_original,
             "class_names": ctx.dataset_info.class_names,
             "preview_meta": str(meta_path),
             "exported_sample_ids": exported_sample_ids,

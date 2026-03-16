@@ -282,7 +282,7 @@ def test_export_uses_yaml_config(tmp_path: Path, capsys) -> None:
     output = capsys.readouterr().out
     export_dir_line = next(line for line in output.splitlines() if line.startswith("export_dir="))
     export_dir = Path(export_dir_line.split("=", 1)[1])
-    assert (export_dir / "images" / "s1.png").exists()
+    assert not (export_dir / "images" / "s1.png").exists()
     assert (export_dir / "overlays" / "s1.png").exists()
 
 
