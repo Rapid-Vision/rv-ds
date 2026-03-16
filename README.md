@@ -1,6 +1,6 @@
 # rv-ds
 
-`rv-ds` is a CLI for inspecting RV datasets, generating export configs, and exporting them into built-in target formats.
+`rv-ds` is a CLI for inspecting RV datasets, generating export configs, and exporting them through built-in or custom plugins.
 
 ## Install
 
@@ -38,9 +38,9 @@ uv run rv-ds export --config ./rv-ds.yaml
 
 - `rv-ds inspect <dataset_dir>`: summarize sample health, tags, and suggested class mappings
 - `rv-ds init [dataset_dir]`: generate a YAML config interactively
-- `rv-ds validate --config <path>`: validate config and dataset compatibility
+- `rv-ds validate --config <path>`: validate config and plugin compatibility
 - `rv-ds export --config <path>`: execute an export from YAML config
-- `rv-ds list`: list supported tasks, output formats, and presets
+- `rv-ds list`: list built-in extractors, exporters, and presets
 
 ## Config Example
 
@@ -49,43 +49,36 @@ dataset:
   path: ./examples/dataset
 
 pipeline:
-  task: segmentation
-  output_format: yolo_seg
   output_dir: ./exports
 
-selection:
-  scene:
-    require_tags: []
-    exclude_tags: []
-  objects:
-    target_tags: []
-    include_unmapped: false
+extractor:
+  spec: default-seg
+  options:
+    class_mapping:
+      - class: sphere
+        required_tags: [sphere]
+      - class: cube
+        required_tags: [cube]
 
-classes:
-  mapping:
-    - name: sphere
-      match:
-        all_tags: [sphere]
-    - name: cube
-      match:
-        all_tags: [cube]
-
-export:
-  include_empty: false
-  splits:
-    train: 0.8
-    val: 0.2
+exporter:
+  spec: default-yolo-seg
+  options:
+    include_empty: false
+    splits:
+      train: 0.8
+      val: 0.2
 
 debug:
   dump_ir: false
   fail_on_warning: false
 ```
 
-## Built-in Output Formats
+`spec` can be a built-in plugin name such as `default-seg` or a relative/absolute path to a custom `.py` plugin file. Relative plugin paths are resolved relative to the config file.
 
-- `preview`: image copies plus overlay previews
-- `yolo_bbox`: YOLO detection labels
-- `yolo_seg`: YOLO segmentation labels
+## Built-in Plugins
+
+- Extractors: `default-bbox`, `default-seg`, `default-seg-bbox`
+- Exporters: `default-preview-bbox`, `default-preview-seg`, `default-yolo-bbox`, `default-yolo-seg`
 
 ## Compatibility
 

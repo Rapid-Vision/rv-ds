@@ -1,9 +1,9 @@
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import yaml  # type: ignore[import-untyped]
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from .errors import ValidationFailure
 from .pipeline import ExportConfig as PipelineExportConfig
@@ -11,19 +11,6 @@ from .pipeline import ExportConfig as PipelineExportConfig
 DEFAULT_IMAGE_FILE = "Image.png"
 DEFAULT_OUTPUT_DIR = "./exports"
 DEFAULT_CONFIG_PATH = "rv-ds.yaml"
-DEFAULT_YOLO_SPLITS = {"train": 0.8, "val": 0.2}
-UNMAPPED_CLASS_NAME = "unmapped"
-
-TaskName = Literal["detection", "segmentation", "both"]
-OutputFormatName = Literal["preview", "yolo_bbox", "yolo_seg"]
-
-
-def _normalize_tag_list(raw: Any) -> list[str]:
-    if raw is None:
-        return []
-    if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
-        raise ValueError("must be a list of strings")
-    return [item.strip() for item in raw if item.strip()]
 
 
 class DatasetConfig(BaseModel):
@@ -47,8 +34,6 @@ class DatasetConfig(BaseModel):
 class PipelineConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    task: TaskName
-    output_format: OutputFormatName
     output_dir: Path = Path(DEFAULT_OUTPUT_DIR)
 
     @field_validator("output_dir", mode="before")
@@ -64,114 +49,28 @@ class PipelineConfig(BaseModel):
         raise ValueError("must be a path string")
 
 
-class SceneSelectionConfig(BaseModel):
+class PluginConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    require_tags: list[str] = Field(default_factory=list)
-    exclude_tags: list[str] = Field(default_factory=list)
+    spec: str
+    options: dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("require_tags", "exclude_tags", mode="before")
+    @field_validator("spec")
     @classmethod
-    def _validate_tags(cls, value: Any) -> list[str]:
-        return _normalize_tag_list(value)
-
-
-class ObjectSelectionConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    target_tags: list[str] = Field(default_factory=list)
-    include_unmapped: bool = False
-
-    @field_validator("target_tags", mode="before")
-    @classmethod
-    def _validate_tags(cls, value: Any) -> list[str]:
-        return _normalize_tag_list(value)
-
-
-class SelectionConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    scene: SceneSelectionConfig = Field(default_factory=SceneSelectionConfig)
-    objects: ObjectSelectionConfig = Field(default_factory=ObjectSelectionConfig)
-
-
-class TagMatchConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    all_tags: list[str]
-
-    @field_validator("all_tags", mode="before")
-    @classmethod
-    def _validate_tags(cls, value: Any) -> list[str]:
-        tags = _normalize_tag_list(value)
-        if not tags:
-            raise ValueError("must contain at least one tag")
-        return tags
-
-
-class ClassMappingConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    name: str
-    match: TagMatchConfig
-
-    @field_validator("name")
-    @classmethod
-    def _validate_name(cls, value: str) -> str:
+    def _validate_spec(cls, value: str) -> str:
         stripped = value.strip()
         if not stripped:
             raise ValueError("must be a non-empty string")
         return stripped
 
-
-class ClassesConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    mapping: list[ClassMappingConfig]
-
-    @field_validator("mapping")
+    @field_validator("options", mode="before")
     @classmethod
-    def _validate_mapping(cls, value: list[ClassMappingConfig]) -> list[ClassMappingConfig]:
-        if not value:
-            raise ValueError("must contain at least one class mapping")
-        seen: set[str] = set()
-        duplicates: set[str] = set()
-        for item in value:
-            if item.name in seen:
-                duplicates.add(item.name)
-            seen.add(item.name)
-        if duplicates:
-            joined = ", ".join(sorted(duplicates))
-            raise ValueError(f"contains duplicate class names: {joined}")
-        return value
-
-
-class ExportConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", strict=True)
-
-    include_empty: bool = False
-    splits: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_YOLO_SPLITS))
-
-    @field_validator("splits")
-    @classmethod
-    def _validate_splits(cls, value: dict[str, float]) -> dict[str, float]:
-        allowed = {"train", "val", "test"}
-        if not value:
-            raise ValueError("must not be empty")
-        unknown = set(value) - allowed
-        if unknown:
-            joined = ", ".join(sorted(unknown))
-            raise ValueError(f"contains unsupported split names: {joined}")
-        if "train" not in value or "val" not in value:
-            raise ValueError("must include train and val")
-        total = 0.0
-        for name, ratio in value.items():
-            if ratio <= 0.0:
-                raise ValueError(f"{name} must be > 0")
-            total += ratio
-        if abs(total - 1.0) > 1e-6:
-            raise ValueError("must sum to 1.0")
-        return value
+    def _validate_options(cls, value: Any) -> dict[str, Any]:
+        if value is None:
+            return {}
+        if not isinstance(value, Mapping):
+            raise ValueError("must be an object")
+        return dict(value)
 
 
 class DebugConfig(BaseModel):
@@ -185,26 +84,10 @@ class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     dataset: DatasetConfig
-    pipeline: PipelineConfig
-    selection: SelectionConfig = Field(default_factory=SelectionConfig)
-    classes: ClassesConfig
-    export: ExportConfig = Field(default_factory=ExportConfig)
+    pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
+    extractor: PluginConfig
+    exporter: PluginConfig
     debug: DebugConfig = Field(default_factory=DebugConfig)
-
-    @model_validator(mode="after")
-    def _validate_pipeline_compatibility(self) -> "AppConfig":
-        task = self.pipeline.task
-        output_format = self.pipeline.output_format
-
-        if task == "detection" and output_format == "yolo_seg":
-            raise ValueError(
-                "pipeline.output_format 'yolo_seg' requires task 'segmentation' or 'both'"
-            )
-        if task == "segmentation" and output_format == "yolo_bbox":
-            raise ValueError(
-                "pipeline.output_format 'yolo_bbox' requires task 'detection' or 'both'"
-            )
-        return self
 
 
 class ResolvedAppConfig(BaseModel):
@@ -215,6 +98,8 @@ class ResolvedAppConfig(BaseModel):
     app: AppConfig
     dataset_dir: Path
     output_dir: Path
+    extractor_spec: str
+    exporter_spec: str
 
 
 def load_app_config(path: Path) -> ResolvedAppConfig:
@@ -245,6 +130,8 @@ def load_app_config(path: Path) -> ResolvedAppConfig:
         app=app,
         dataset_dir=dataset_dir,
         output_dir=output_dir,
+        extractor_spec=_resolve_plugin_spec(app.extractor.spec, config_dir),
+        exporter_spec=_resolve_plugin_spec(app.exporter.spec, config_dir),
     )
 
 
@@ -254,38 +141,14 @@ def dump_app_config(app_config: AppConfig) -> str:
 
 
 def build_pipeline_export_config(resolved: ResolvedAppConfig) -> PipelineExportConfig:
-    extractor_spec, exporter_spec = _select_pipeline_specs(
-        resolved.app.pipeline.task, resolved.app.pipeline.output_format
-    )
-    extractor_opts = {
-        "class_mapping": [
-            {
-                "class": item.name,
-                "required_tags": item.match.all_tags,
-            }
-            for item in resolved.app.classes.mapping
-        ],
-        "target_tags": resolved.app.selection.objects.target_tags,
-        "require_tags": resolved.app.selection.scene.require_tags,
-        "exclude_tags": resolved.app.selection.scene.exclude_tags,
-        "include_empty": resolved.app.export.include_empty,
-        "include_unmapped": resolved.app.selection.objects.include_unmapped,
-        "unmapped_class_name": UNMAPPED_CLASS_NAME,
-    }
-    exporter_opts: dict[str, Any] = {
-        "include_empty": resolved.app.export.include_empty,
-    }
-    if resolved.app.pipeline.output_format != "preview":
-        exporter_opts["splits"] = resolved.app.export.splits
-
     return PipelineExportConfig(
         dataset_dir=resolved.dataset_dir,
         output_dir=resolved.output_dir,
         image_file=DEFAULT_IMAGE_FILE,
-        extractor_spec=extractor_spec,
-        extractor_opts=extractor_opts,
-        exporter_spec=exporter_spec,
-        exporter_opts=exporter_opts,
+        extractor_spec=resolved.extractor_spec,
+        extractor_opts=dict(resolved.app.extractor.options),
+        exporter_spec=resolved.exporter_spec,
+        exporter_opts=dict(resolved.app.exporter.options),
         fail_on_plugin_warning=resolved.app.debug.fail_on_warning,
         dump_ir=resolved.app.debug.dump_ir,
     )
@@ -294,59 +157,74 @@ def build_pipeline_export_config(resolved: ResolvedAppConfig) -> PipelineExportC
 def default_app_config(dataset_dir: Path) -> AppConfig:
     return AppConfig(
         dataset=DatasetConfig(path=dataset_dir),
-        pipeline=PipelineConfig(task="segmentation", output_format="yolo_seg"),
-        classes=ClassesConfig(
-            mapping=[
-                ClassMappingConfig(
-                    name="example",
-                    match=TagMatchConfig(all_tags=["example"]),
-                )
-            ]
+        extractor=PluginConfig(
+            spec="default-seg",
+            options={
+                "class_mapping": [{"class": "example", "required_tags": ["example"]}]
+            },
         ),
-        export=ExportConfig(include_empty=False),
+        exporter=PluginConfig(
+            spec="default-yolo-seg",
+            options={"include_empty": False, "splits": {"train": 0.8, "val": 0.2}},
+        ),
     )
 
 
-def list_builtin_capabilities() -> dict[str, list[str]]:
+def list_builtin_capabilities() -> dict[str, Any]:
+    presets = {
+        "detection-preview": {
+            "extractor": "default-bbox",
+            "exporter": "default-preview-bbox",
+        },
+        "detection-yolo_bbox": {
+            "extractor": "default-bbox",
+            "exporter": "default-yolo-bbox",
+        },
+        "segmentation-preview": {
+            "extractor": "default-seg",
+            "exporter": "default-preview-seg",
+        },
+        "segmentation-yolo_seg": {
+            "extractor": "default-seg",
+            "exporter": "default-yolo-seg",
+        },
+        "both-preview": {
+            "extractor": "default-seg-bbox",
+            "exporter": "default-preview-seg",
+        },
+        "both-yolo_bbox": {
+            "extractor": "default-seg-bbox",
+            "exporter": "default-yolo-bbox",
+        },
+        "both-yolo_seg": {
+            "extractor": "default-seg-bbox",
+            "exporter": "default-yolo-seg",
+        },
+    }
     return {
-        "tasks": ["detection", "segmentation", "both"],
-        "output_formats": ["preview", "yolo_bbox", "yolo_seg"],
-        "presets": [
-            "detection-preview",
-            "detection-yolo_bbox",
-            "segmentation-preview",
-            "segmentation-yolo_seg",
-            "both-preview",
-            "both-yolo_bbox",
-            "both-yolo_seg",
+        "extractors": ["default-seg", "default-bbox", "default-seg-bbox"],
+        "exporters": [
+            "default-preview-bbox",
+            "default-preview-seg",
+            "default-yolo-bbox",
+            "default-yolo-seg",
         ],
+        "presets": presets,
     }
-
-
-def _select_pipeline_specs(
-    task: TaskName, output_format: OutputFormatName
-) -> tuple[str, str]:
-    extractor_by_task = {
-        "detection": "default-bbox",
-        "segmentation": "default-seg",
-        "both": "default-seg-bbox",
-    }
-    extractor_spec = extractor_by_task[task]
-
-    if output_format == "preview":
-        exporter_spec = (
-            "default-preview-bbox" if task == "detection" else "default-preview-seg"
-        )
-        return extractor_spec, exporter_spec
-    if output_format == "yolo_bbox":
-        return extractor_spec, "default-yolo-bbox"
-    return extractor_spec, "default-yolo-seg"
 
 
 def _resolve_path(path: Path, base_dir: Path) -> Path:
     if path.is_absolute():
         return path.resolve()
     return (base_dir / path).resolve()
+
+
+def _resolve_plugin_spec(spec: str, base_dir: Path) -> str:
+    path = Path(spec)
+    looks_like_path = path.suffix == ".py" or len(path.parts) > 1
+    if not looks_like_path:
+        return spec
+    return str(_resolve_path(path, base_dir))
 
 
 def _format_validation_error(exc: ValidationError) -> str:

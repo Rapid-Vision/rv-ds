@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import yaml
 
+from rv_ds.app_config import load_app_config
 from rv_ds.cli import main
 
 
@@ -87,12 +88,13 @@ def test_init_writes_yaml_config(monkeypatch, tmp_path: Path, capsys) -> None:
 
     assert exit_code == 0
     payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    assert payload["pipeline"]["task"] == "segmentation"
-    assert payload["pipeline"]["output_format"] == "yolo_seg"
-    assert [item["name"] for item in payload["classes"]["mapping"]] == [
-        "cube",
-        "sphere",
-    ]
+    assert payload["pipeline"]["output_dir"] == "exports"
+    assert payload["extractor"]["spec"] == "default-seg"
+    assert payload["exporter"]["spec"] == "default-yolo-seg"
+    assert [
+        item["class"] for item in payload["extractor"]["options"]["class_mapping"]
+    ] == ["cube", "sphere"]
+    assert payload["exporter"]["options"]["splits"] == {"train": 0.8, "val": 0.2}
     assert f"rv-ds export --config {config_path.resolve()}" in capsys.readouterr().out
 
 
@@ -134,19 +136,22 @@ def test_validate_resolves_paths_relative_to_config(tmp_path: Path, capsys) -> N
         yaml.safe_dump(
             {
                 "dataset": {"path": "./dataset"},
-                "pipeline": {
-                    "task": "detection",
-                    "output_format": "yolo_bbox",
-                    "output_dir": "./exports",
+                "pipeline": {"output_dir": "./exports"},
+                "extractor": {
+                    "spec": "default-bbox",
+                    "options": {
+                        "class_mapping": [
+                            {"class": "sphere", "required_tags": ["sphere"]}
+                        ]
+                    },
                 },
-                "selection": {
-                    "scene": {"require_tags": [], "exclude_tags": []},
-                    "objects": {"target_tags": [], "include_unmapped": False},
+                "exporter": {
+                    "spec": "default-yolo-bbox",
+                    "options": {
+                        "include_empty": False,
+                        "splits": {"train": 0.8, "val": 0.2},
+                    },
                 },
-                "classes": {
-                    "mapping": [{"name": "sphere", "match": {"all_tags": ["sphere"]}}]
-                },
-                "export": {"include_empty": False, "splits": {"train": 0.8, "val": 0.2}},
                 "debug": {"dump_ir": False, "fail_on_warning": False},
             },
             sort_keys=False,
@@ -162,6 +167,83 @@ def test_validate_resolves_paths_relative_to_config(tmp_path: Path, capsys) -> N
     assert "exporter=default-yolo-bbox" in output
 
 
+def test_validate_resolves_relative_custom_plugin_paths(tmp_path: Path, capsys) -> None:
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    dataset_dir = project_dir / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "s1", object_tags={2: ["sphere"]})
+
+    extractor_path = project_dir / "plugins" / "extractor.py"
+    extractor_path.parent.mkdir()
+    extractor_path.write_text(
+        """
+from rv_ds.plugin_api import BaseExtractor, ExtractorDatasetInfo, PluginOptions
+
+
+class ExtractorOptions(PluginOptions):
+    pass
+
+
+class ExtractorPlugin(BaseExtractor):
+    OptionsModel = ExtractorOptions
+    produced_features = frozenset({"instance_class", "instance_bbox"})
+
+    def describe_dataset(self, ctx):
+        return ExtractorDatasetInfo(class_names=["sphere"], meta={})
+
+    def extract_sample(self, ctx, sample):
+        return None
+""",
+        encoding="utf-8",
+    )
+    exporter_path = project_dir / "plugins" / "exporter.py"
+    exporter_path.write_text(
+        """
+from rv_ds.plugin_api import BaseExporter, ExporterRunResult, PluginOptions
+
+
+class ExporterOptions(PluginOptions):
+    pass
+
+
+class ExporterPlugin(BaseExporter):
+    OptionsModel = ExporterOptions
+    required_features = frozenset({"instance_class"})
+
+    def export_dataset(self, ctx):
+        return ExporterRunResult(stats={}, outputs=[], meta={})
+""",
+        encoding="utf-8",
+    )
+
+    config_path = project_dir / "rv-ds.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "dataset": {"path": "./dataset"},
+                "pipeline": {"output_dir": "./exports"},
+                "extractor": {"spec": "./plugins/extractor.py", "options": {}},
+                "exporter": {"spec": "./plugins/exporter.py", "options": {}},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    resolved = load_app_config(config_path)
+
+    assert resolved.extractor_spec == str(extractor_path.resolve())
+    assert resolved.exporter_spec == str(exporter_path.resolve())
+
+    exit_code = main(["validate", "--config", str(config_path)])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert f"extractor={extractor_path.resolve()}" in output
+    assert f"exporter={exporter_path.resolve()}" in output
+
+
 def test_export_uses_yaml_config(tmp_path: Path, capsys) -> None:
     project_dir = tmp_path / "project"
     project_dir.mkdir()
@@ -174,19 +256,19 @@ def test_export_uses_yaml_config(tmp_path: Path, capsys) -> None:
         yaml.safe_dump(
             {
                 "dataset": {"path": "./dataset"},
-                "pipeline": {
-                    "task": "segmentation",
-                    "output_format": "preview",
-                    "output_dir": "./exports",
+                "pipeline": {"output_dir": "./exports"},
+                "extractor": {
+                    "spec": "default-seg",
+                    "options": {
+                        "class_mapping": [
+                            {"class": "sphere", "required_tags": ["sphere"]}
+                        ]
+                    },
                 },
-                "selection": {
-                    "scene": {"require_tags": [], "exclude_tags": []},
-                    "objects": {"target_tags": [], "include_unmapped": False},
+                "exporter": {
+                    "spec": "default-preview-seg",
+                    "options": {"include_empty": True},
                 },
-                "classes": {
-                    "mapping": [{"name": "sphere", "match": {"all_tags": ["sphere"]}}]
-                },
-                "export": {"include_empty": True, "splits": {"train": 0.8, "val": 0.2}},
                 "debug": {"dump_ir": False, "fail_on_warning": False},
             },
             sort_keys=False,
@@ -204,7 +286,7 @@ def test_export_uses_yaml_config(tmp_path: Path, capsys) -> None:
     assert (export_dir / "overlays" / "s1.png").exists()
 
 
-def test_validate_rejects_invalid_task_output_combo(tmp_path: Path, capsys) -> None:
+def test_validate_rejects_old_unified_schema(tmp_path: Path, capsys) -> None:
     dataset_dir = tmp_path / "dataset"
     dataset_dir.mkdir()
     _write_sample(dataset_dir, "s1", object_tags={2: ["sphere"]})
@@ -215,18 +297,11 @@ def test_validate_rejects_invalid_task_output_combo(tmp_path: Path, capsys) -> N
             {
                 "dataset": {"path": str(dataset_dir)},
                 "pipeline": {
-                    "task": "detection",
-                    "output_format": "yolo_seg",
                     "output_dir": "./exports",
                 },
-                "selection": {
-                    "scene": {"require_tags": [], "exclude_tags": []},
-                    "objects": {"target_tags": [], "include_unmapped": False},
-                },
-                "classes": {
-                    "mapping": [{"name": "sphere", "match": {"all_tags": ["sphere"]}}]
-                },
-                "export": {"include_empty": False, "splits": {"train": 0.8, "val": 0.2}},
+                "selection": {},
+                "classes": {"mapping": []},
+                "export": {"include_empty": False},
                 "debug": {"dump_ir": False, "fail_on_warning": False},
             },
             sort_keys=False,
@@ -237,7 +312,6 @@ def test_validate_rejects_invalid_task_output_combo(tmp_path: Path, capsys) -> N
     exit_code = main(["validate", "--config", str(config_path)])
 
     assert exit_code == 2
-    assert (
-        "pipeline.output_format 'yolo_seg' requires task 'segmentation' or 'both'"
-        in capsys.readouterr().err
-    )
+    error = capsys.readouterr().err
+    assert "invalid config:" in error
+    assert "pipeline.task" in error or "extractor" in error

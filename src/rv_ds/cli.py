@@ -9,17 +9,11 @@ from .app_config import (
     DEFAULT_IMAGE_FILE,
     DEFAULT_OUTPUT_DIR,
     AppConfig,
-    ClassesConfig,
-    ClassMappingConfig,
     DatasetConfig,
     DebugConfig,
-    ExportConfig,
-    OutputFormatName,
+    PluginConfig,
     PipelineConfig,
     ResolvedAppConfig,
-    SelectionConfig,
-    TagMatchConfig,
-    TaskName,
     build_pipeline_export_config,
     dump_app_config,
     list_builtin_capabilities,
@@ -154,19 +148,20 @@ def _handle_init(dataset_dir: Path, output_config: Path, force: bool) -> int:
 
     app_config = AppConfig(
         dataset=DatasetConfig(path=dataset_dir),
-        pipeline=PipelineConfig(
-            task=cast(TaskName, task),
-            output_format=cast(OutputFormatName, output_format),
-            output_dir=Path(output_dir),
+        pipeline=PipelineConfig(output_dir=Path(output_dir)),
+        extractor=PluginConfig(
+            spec=_select_builtin_extractor_spec(task),
+            options={
+                "class_mapping": [
+                    {"class": tag, "required_tags": [tag]} for tag in selected_tags
+                ],
+                "include_empty": include_empty,
+            },
         ),
-        selection=SelectionConfig(),
-        classes=ClassesConfig(
-            mapping=[
-                ClassMappingConfig(name=tag, match=TagMatchConfig(all_tags=[tag]))
-                for tag in selected_tags
-            ]
+        exporter=PluginConfig(
+            spec=_select_builtin_exporter_spec(task, output_format),
+            options=_build_builtin_exporter_options(output_format, include_empty),
         ),
-        export=ExportConfig(include_empty=include_empty),
         debug=DebugConfig(),
     )
 
@@ -232,15 +227,17 @@ def _handle_validate(config_path: Path) -> int:
 
 def _handle_list() -> int:
     capabilities = list_builtin_capabilities()
-    print("Tasks:")
-    for item in capabilities["tasks"]:
+    print("Built-in extractors:")
+    for item in capabilities["extractors"]:
         print(f"  - {item}")
-    print("Output formats:")
-    for item in capabilities["output_formats"]:
+    print("Built-in exporters:")
+    for item in capabilities["exporters"]:
         print(f"  - {item}")
     print("Presets:")
-    for item in capabilities["presets"]:
-        print(f"  - {item}")
+    for name, preset in capabilities["presets"].items():
+        print(
+            f"  - {name}: extractor={preset['extractor']} exporter={preset['exporter']}"
+        )
     return 0
 
 
@@ -308,8 +305,8 @@ def validate_app_config(resolved: ResolvedAppConfig) -> ValidationSummary:
     return ValidationSummary(
         valid_samples=len(samples),
         class_names=list(dataset_info.class_names),
-        extractor_name=pipeline_config.extractor_spec,
-        exporter_name=pipeline_config.exporter_spec,
+        extractor_name=resolved.extractor_spec,
+        exporter_name=resolved.exporter_spec,
     )
 
 
@@ -386,6 +383,32 @@ def _prompt_output_format(task: str) -> str:
 
     default = "3" if any(key == "3" for key, _ in options) else "2"
     return _prompt_choice("Select output format", options, default=default)
+
+
+def _select_builtin_extractor_spec(task: str) -> str:
+    extractor_by_task = {
+        "detection": "default-bbox",
+        "segmentation": "default-seg",
+        "both": "default-seg-bbox",
+    }
+    return cast(str, extractor_by_task[task])
+
+
+def _select_builtin_exporter_spec(task: str, output_format: str) -> str:
+    if output_format == "preview":
+        return "default-preview-bbox" if task == "detection" else "default-preview-seg"
+    if output_format == "yolo_bbox":
+        return "default-yolo-bbox"
+    return "default-yolo-seg"
+
+
+def _build_builtin_exporter_options(
+    output_format: str, include_empty: bool
+) -> dict[str, object]:
+    options: dict[str, object] = {"include_empty": include_empty}
+    if output_format != "preview":
+        options["splits"] = {"train": 0.8, "val": 0.2}
+    return options
 
 
 def _prompt_tag_selection(report: InspectReport) -> list[str]:
