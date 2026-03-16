@@ -1,0 +1,23 @@
+dataset:
+  path: ../dataset
+
+pipeline:
+  output_dir: ../../exports
+
+extractor:
+  spec: default-bbox
+  options:
+    class_mapping:
+      - class: cube
+        required_tags: [cube]
+      - class: sphere
+        required_tags: [sphere]
+
+exporter:
+  spec: default-preview-bbox
+  options:
+    include_empty: true
+
+debug:
+  dump_ir: false
+  fail_on_warning: false

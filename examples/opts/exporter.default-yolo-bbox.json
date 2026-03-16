@@ -1,7 +1,0 @@
-{
-  "include_empty": false,
-  "splits": {
-    "train": 0.8,
-    "val": 0.2
-  }
-}

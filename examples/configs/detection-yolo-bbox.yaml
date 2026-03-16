@@ -1,0 +1,26 @@
+dataset:
+  path: ../dataset
+
+pipeline:
+  output_dir: ../../exports
+
+extractor:
+  spec: default-bbox
+  options:
+    class_mapping:
+      - class: cube
+        required_tags: [cube]
+      - class: sphere
+        required_tags: [sphere]
+
+exporter:
+  spec: default-yolo-bbox
+  options:
+    include_empty: false
+    splits:
+      train: 0.8
+      val: 0.2
+
+debug:
+  dump_ir: false
+  fail_on_warning: false

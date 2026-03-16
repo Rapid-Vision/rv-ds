@@ -1,0 +1,28 @@
+dataset:
+  path: ../dataset
+
+pipeline:
+  output_dir: ../../exports
+
+extractor:
+  spec: default-seg-bbox
+  options:
+    class_mapping:
+      - class: cube
+        required_tags: [cube]
+      - class: sphere
+        required_tags: [sphere]
+    epsilon_ratio: 0.002
+    min_segment_area: 0.01
+
+exporter:
+  spec: default-yolo-seg
+  options:
+    include_empty: false
+    splits:
+      train: 0.8
+      val: 0.2
+
+debug:
+  dump_ir: false
+  fail_on_warning: false
