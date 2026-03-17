@@ -366,6 +366,38 @@ def test_preview_bbox_max_samples_limits_outputs(tmp_path: Path) -> None:
     assert stream_meta["stream"]["yielded_samples"] == 3
 
 
+def test_extractor_max_samples_caps_preview_stream(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    for idx in range(10):
+        _write_sample(dataset_dir, f"s{idx}", {2: ["sphere"]})
+
+    config = ExportConfig(
+        dataset_dir=dataset_dir,
+        output_dir=tmp_path / "exports",
+        image_file="Image.png",
+        extractor_spec="default-bbox",
+        extractor_opts={**_default_detection_opts(), "max_samples": 4},
+        exporter_spec="default-preview-bbox",
+        exporter_opts={"include_empty": True, "_framework": {"random_seed": 7}},
+        fail_on_plugin_warning=False,
+        dump_ir=False,
+    )
+
+    result = run_export(config)
+    preview_meta = json.loads(
+        (result.export_dir / "preview_meta.json").read_text(encoding="utf-8")
+    )
+    stream_meta = json.loads(
+        (result.export_dir / "rv_ds_meta.json").read_text(encoding="utf-8")
+    )
+
+    assert preview_meta["stats"]["exported_samples"] == 4
+    assert len(preview_meta["exported_sample_ids"]) == 4
+    assert stream_meta["stream"]["yielded_samples"] == 4
+    assert stream_meta["stream"]["processed_candidates"] == 4
+
+
 def test_preview_bbox_seed_is_deterministic(tmp_path: Path) -> None:
     dataset_dir = tmp_path / "dataset"
     dataset_dir.mkdir()

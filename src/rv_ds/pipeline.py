@@ -241,6 +241,7 @@ def _build_sample_iterator(
     collect_samples: bool,
 ) -> tuple[IteratorFactory, StreamState]:
     state = StreamState()
+    extractor_max_samples = getattr(prepared.extractor.opts, "max_samples", None)
 
     def _iter(request: StreamRequest, max_samples: int | None) -> Iterator[SampleRecord]:
         if state.stream_started:
@@ -256,6 +257,11 @@ def _build_sample_iterator(
 
         yielded_this_call = 0
         for sample_path in sample_paths:
+            if (
+                extractor_max_samples is not None
+                and state.yielded_samples >= extractor_max_samples
+            ):
+                break
             state.processed_candidates += 1
             try:
                 extracted = prepared.extractor.extract_sample(
@@ -279,6 +285,11 @@ def _build_sample_iterator(
             yield extracted
 
             yielded_this_call += 1
+            if (
+                extractor_max_samples is not None
+                and state.yielded_samples >= extractor_max_samples
+            ):
+                break
             if max_samples is not None and yielded_this_call >= max_samples:
                 break
 

@@ -150,12 +150,9 @@ def _handle_init(dataset_dir: Path, output_config: Path, force: bool) -> int:
         pipeline=PipelineConfig(output_dir=Path(output_dir)),
         extractor=PluginConfig(
             spec=_select_builtin_extractor_spec(task),
-            options={
-                "class_mapping": [
-                    {"class": tag, "required_tags": [tag]} for tag in selected_tags
-                ],
-                "include_empty": include_empty,
-            },
+            options=_build_builtin_extractor_options(
+                selected_tags, include_empty, output_format
+            ),
         ),
         exporter=PluginConfig(
             spec=_select_builtin_exporter_spec(task, output_format),
@@ -413,6 +410,20 @@ def _build_builtin_exporter_options(
         options["compare_original"] = True
     else:
         options["splits"] = {"train": 0.8, "val": 0.2}
+    return options
+
+
+def _build_builtin_extractor_options(
+    selected_tags: list[str], include_empty: bool, output_format: str
+) -> dict[str, object]:
+    options: dict[str, object] = {
+        "class_mapping": [
+            {"class": tag, "required_tags": [tag]} for tag in selected_tags
+        ],
+        "include_empty": include_empty,
+    }
+    if output_format == "preview":
+        options["max_samples"] = 100
     return options
 
 

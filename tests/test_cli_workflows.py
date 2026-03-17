@@ -98,6 +98,27 @@ def test_init_writes_yaml_config(monkeypatch, tmp_path: Path, capsys) -> None:
     assert f"rv-ds export --config {config_path.resolve()}" in capsys.readouterr().out
 
 
+def test_init_preview_config_sets_extractor_max_samples(
+    monkeypatch, tmp_path: Path
+) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "s1", object_tags={2: ["sphere"], 3: ["cube"]})
+    config_path = tmp_path / "rv-ds.yaml"
+
+    answers = iter(["", "1", "", "", ""])
+    monkeypatch.setattr("builtins.input", lambda _: next(answers))
+
+    exit_code = main(
+        ["init", str(dataset_dir), "--output-config", str(config_path)]
+    )
+
+    assert exit_code == 0
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    assert payload["exporter"]["spec"] == "default-preview-seg"
+    assert payload["extractor"]["options"]["max_samples"] == 100
+
+
 def test_init_fails_for_invalid_dataset(tmp_path: Path, capsys) -> None:
     dataset_dir = tmp_path / "dataset"
     dataset_dir.mkdir()

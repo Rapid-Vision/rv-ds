@@ -32,6 +32,7 @@ extractor:
 - `target_tags`: only keep objects with these tags
 - `require_tags`: require scene tags
 - `exclude_tags`: skip scene tags
+- `max_samples`: cap how many samples the extractor yields
 - `epsilon_ratio`: polygon simplification for segmentation
 - `min_segment_area`: skip very small segments
 

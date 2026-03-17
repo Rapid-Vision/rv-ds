@@ -72,6 +72,7 @@ class DefaultExtractorOptions(PluginOptions):
     require_tags: list[str] | str = Field(default_factory=list)
     exclude_tags: list[str] | str = Field(default_factory=list)
     include_empty: bool = False
+    max_samples: int | None = Field(default=None, ge=1)
     include_unmapped: bool = False
     unmapped_class_name: str = "unmapped"
     epsilon_ratio: float = 0.002

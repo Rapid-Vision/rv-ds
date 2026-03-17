@@ -61,6 +61,17 @@ def test_load_builtin_segment_extractor_rejects_invalid_min_segment_area() -> No
         )
 
 
+def test_load_builtin_segment_extractor_rejects_invalid_max_samples() -> None:
+    with pytest.raises(ValidationFailure, match="max_samples"):
+        load_extractor(
+            "default-seg",
+            {
+                "class_mapping": [{"class": "sphere", "required_tags": ["sphere"]}],
+                "max_samples": 0,
+            },
+        )
+
+
 def test_load_path_extractor_plugin(tmp_path: Path) -> None:
     plugin = tmp_path / "extractor.py"
     plugin.write_text(
