@@ -1,33 +1,61 @@
-# Built-in Extractors
+# Built-In Extractors
 
-Built-ins are registered in `plugin_loader.BUILTIN_EXTRACTORS`.
+Use an extractor to turn RV samples into class, bbox, and segment records for the exporter.
 
-## IDs and Features
+## Available Extractors
 
-| ID | Produced features |
-|---|---|
-| `default-seg` | `instance_class`, `instance_segment` |
-| `default-bbox` | `instance_class`, `instance_bbox` |
-| `default-seg-bbox` | `instance_class`, `instance_segment`, `instance_bbox` |
+| Extractor | Produces | Use for |
+| --- | --- | --- |
+| `default-bbox` | `INSTANCE_CLASS`, `INSTANCE_BBOX` | detection |
+| `default-seg` | `INSTANCE_CLASS`, `INSTANCE_SEGMENT` | segmentation |
+| `default-seg-bbox` | `INSTANCE_CLASS`, `INSTANCE_SEGMENT`, `INSTANCE_BBOX` | exporters that need both |
 
-All three use the same options schema (`DefaultExtractorOptions`).
+## Common Config
 
-## Options
+All built-in extractors use the same options shape.
 
-| Field | Type | Default | Notes |
-|---|---|---|---|
-| `class_mapping` | `list[ClassMappingRule]` | required | Non-empty; class names must be unique. |
-| `target_tags` | `list[str]` or CSV string | `[]` | Object-level tag filter. |
-| `min_count` | `dict[str, int]` | `{}` | Per-tag minimum object counts; non-negative values. |
-| `require_tags` | `list[str]` or CSV string | `[]` | Scene-level required tags. |
-| `exclude_tags` | `list[str]` or CSV string | `[]` | Scene-level excluded tags. |
-| `include_empty` | `bool` | `false` | Include samples without valid instances. |
-| `epsilon_ratio` | `float` | `0.002` | Polygon simplification ratio (segment modes). |
+```yaml
+extractor:
+  spec: default-seg
+  options:
+    class_mapping:
+      - class: cube
+        required_tags: [cube]
+      - class: sphere
+        required_tags: [sphere]
+    include_empty: false
+```
 
-### `class_mapping` item
+## Options You Will Actually Use
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `class` | `str` | yes | Non-empty class name. |
-| `required_tags` | `list[str]` | conditional | Set exactly one of `required_tags` or `optional_tags`. |
-| `optional_tags` | `list[str]` | conditional | Set exactly one of `required_tags` or `optional_tags`. |
+- `class_mapping`: map RV object tags to output class names
+- `include_empty`: keep samples with no matched objects
+- `target_tags`: only keep objects with these tags
+- `require_tags`: require scene tags
+- `exclude_tags`: skip scene tags
+- `epsilon_ratio`: polygon simplification for segmentation
+- `min_segment_area`: skip very small segments
+
+## `class_mapping`
+
+Each item must set a class name and one matching rule:
+
+```yaml
+class_mapping:
+  - class: sphere
+    required_tags: [sphere]
+  - class: cube
+    optional_tags: [cube, blue]
+```
+
+Rules:
+
+- `required_tags`: all tags must be present
+- `optional_tags`: any listed tag may match
+- class names must be unique
+
+## Which One Should I Use?
+
+- Pick `default-bbox` for `default-yolo-bbox` and `default-preview-bbox`
+- Pick `default-seg` for `default-yolo-seg`
+- Pick `default-seg-bbox` only if the exporter needs both boxes and segments

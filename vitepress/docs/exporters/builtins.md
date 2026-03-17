@@ -1,55 +1,68 @@
-# Built-in Exporters
+# Built-In Exporters
 
-Built-ins are registered in `plugin_loader.BUILTIN_EXPORTERS`.
+Use an exporter to write the extracted sample stream to disk.
 
-## IDs and Required Features
+## Available Exporters
 
-| ID | Required features |
-|---|---|
-| `default-yolo-seg` | `instance_class`, `instance_bbox` |
-| `default-preview-bbox` | `instance_class`, `instance_bbox` |
-| `default-preview-seg` | `instance_class`, `instance_segment` |
+| Exporter | Requires | Writes |
+| --- | --- | --- |
+| `default-yolo-bbox` | `INSTANCE_CLASS`, `INSTANCE_BBOX` | YOLO detection dataset |
+| `default-yolo-seg` | `INSTANCE_CLASS`, `INSTANCE_SEGMENT` | YOLO segmentation dataset |
+| `default-preview-bbox` | `INSTANCE_CLASS`, `INSTANCE_BBOX` | preview overlay images |
+| `default-preview-seg` | `INSTANCE_CLASS`, `INSTANCE_SEGMENT` | segmentation preview overlay images |
 
-## `default-yolo-seg`
+## YOLO Exporters
 
-Options (`DefaultYoloExporterOptions`):
+```yaml
+exporter:
+  spec: default-yolo-seg
+  options:
+    include_empty: false
+    splits:
+      train: 0.8
+      val: 0.2
+```
 
-| Field | Type | Default | Notes |
-|---|---|---|---|
-| `include_empty` | `bool` | `false` | Write empty label files for samples without lines. |
+Options:
 
-Outputs:
+- `include_empty`: write empty label files when a sample has no annotations
+- `splits`: split ratios, must include `train` and `val`, and must sum to `1.0`
 
-- `images/*.png`
-- `labels/*.txt`
+Output:
+
+- `<split>/images/*.png`
+- `<split>/labels/*.txt`
 - `data.yaml`
 
 ## Preview Exporters
 
-Shared options (`_PreviewBaseOptions`):
+```yaml
+exporter:
+  spec: default-preview-seg
+  options:
+    include_empty: true
+    compare_original: true
+    max_samples: 50
+```
 
-| Field | Type | Default | Applies to |
-|---|---|---|---|
-| `include_empty` | `bool` | `true` | bbox + seg |
-| `max_samples` | `int | null` | `null` | bbox + seg |
-| `fill_bbox` | `bool` | `false` | bbox + seg fallback boxes |
+Common options:
 
-Segment-only option (`DefaultPreviewSegExporterOptions`):
+- `include_empty`: export samples even when nothing is drawn
+- `compare_original`: write original and overlay side by side
+- `max_samples`: limit how many samples are exported
+- `fill_bbox`: draw filled boxes instead of outline only
 
-| Field | Type | Default | Applies to |
-|---|---|---|---|
-| `fill_segment` | `bool` | `true` | seg exporter |
+Segmentation preview also supports:
 
-Behavior:
+- `fill_segment`: draw filled polygons
 
-- `fill_bbox=true`: half-transparent bbox fill plus border.
-- `fill_segment=true`: half-transparent polygon fill plus border.
-- `max_samples`: cap exported sample count.
-- order: random sampling via `iter_samples(order="random")`.
+Output:
 
-### `_framework.random_seed`
+- `overlays/*.png`
+- `preview_meta.json`
 
-Set `_framework.random_seed` in extractor and/or exporter options to make random ordering deterministic.
+## Which One Should I Use?
 
-- must be integer
-- if both set, values must match
+- Pick `default-yolo-bbox` for training a detection model
+- Pick `default-yolo-seg` for training a segmentation model
+- Pick a preview exporter when you want a visual sanity check before training

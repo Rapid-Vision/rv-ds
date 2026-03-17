@@ -1,37 +1,73 @@
----
-layout: home
+# Getting Started
 
-hero:
-  name: "rv-ds"
-  text: "Streaming export framework for RV datasets"
-  tagline: "Build extractors and exporters with explicit feature contracts and strict validation."
-  actions:
-    - theme: brand
-      text: Start Here
-      link: /getting-started
-    - theme: alt
-      text: Plugin Development
-      link: /plugins/overview
+`rv-ds` reads an RV dataset, turns it into an internal sample stream with an extractor, and writes the target format with an exporter.
 
-features:
-  - title: Streaming pipeline
-    details: Exporters pull sample records on demand via one-pass iteration.
-  - title: Strict plugin options
-    details: Pydantic strict mode with forbidden extra fields catches config mistakes early.
-  - title: Contract-first compatibility
-    details: Extractor produced features are validated against exporter required features before execution.
----
+Use this flow:
 
-## Who This Is For
+```bash
+uv sync --dev
+uv run rv-ds inspect ./examples/dataset
+uv run rv-ds init ./examples/dataset
+uv run rv-ds validate --config ./rv-ds.yaml
+uv run rv-ds export --config ./rv-ds.yaml
+```
 
-Primary audience: plugin developers building custom extractor and exporter plugins.
+## Dataset Layout
 
-Secondary audience: CLI users running built-in pipelines for segmentation, detection, and previews.
+Each sample must be a directory under the dataset root:
 
-## What You Get
+```text
+<dataset_dir>/<sample_id>/_meta.json
+<dataset_dir>/<sample_id>/IndexOB.png
+<dataset_dir>/<sample_id>/Image.png
+```
 
-- End-to-end CLI docs for `rv-ds export`
-- Built-in extractor/exporter option references
-- Plugin API contracts and lifecycle
-- Schema and error references
-- Troubleshooting and migration notes
+## Minimal Config
+
+```yaml
+dataset:
+  path: ./examples/dataset
+
+pipeline:
+  output_dir: ./exports
+
+extractor:
+  spec: default-seg
+  options:
+    class_mapping:
+      - class: sphere
+        required_tags: [sphere]
+
+exporter:
+  spec: default-yolo-seg
+  options:
+    include_empty: false
+    splits:
+      train: 0.8
+      val: 0.2
+```
+
+Relative paths are resolved from the config file location.
+
+## Pick A Pair
+
+- `default-bbox` + `default-yolo-bbox`: detection dataset
+- `default-seg` + `default-yolo-seg`: segmentation dataset
+- `default-bbox` + `default-preview-bbox`: bbox preview images
+- `default-seg` or `default-seg-bbox` + `default-preview-seg`: segmentation preview images
+
+## CLI
+
+- `rv-ds inspect <dataset_dir>`: show dataset health and tags
+- `rv-ds init [dataset_dir]`: generate a starter config
+- `rv-ds validate --config <path>`: validate config, dataset, and plugin compatibility
+- `rv-ds export --config <path>`: run export
+- `rv-ds export --config <path> --dry-run`: preflight only, no files written
+- `rv-ds list`: list built-in extractors, exporters, and presets
+
+## Next
+
+- [Built-in extractors](/extractors/builtins)
+- [Writing a custom extractor](/extractors/custom)
+- [Built-in exporters](/exporters/builtins)
+- [Writing a custom exporter](/exporters/custom)
