@@ -192,12 +192,16 @@ def _handle_export(config_path: Path, dry_run: bool) -> int:
     validation_summary = validate_app_config(resolved)
     if dry_run:
         print(f"config_ok: {resolved.config_path}")
+        print(f"dataset: {resolved.dataset_dir}")
+        print(f"output_dir: {resolved.output_dir}")
+        print(f"extractor: {validation_summary.extractor_name}")
+        print(f"exporter: {validation_summary.exporter_name}")
         print(
             "summary: "
             f"valid_samples={validation_summary.valid_samples} "
-            f"class_names={len(validation_summary.class_names)} "
-            f"output_format={resolved.app.pipeline.output_format}"
+            f"class_names={len(validation_summary.class_names)}"
         )
+        print("dry_run: no files written")
         return 0
 
     result = run_export(build_pipeline_export_config(resolved))

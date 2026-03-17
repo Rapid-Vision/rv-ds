@@ -286,6 +286,54 @@ def test_export_uses_yaml_config(tmp_path: Path, capsys) -> None:
     assert (export_dir / "overlays" / "s1.png").exists()
 
 
+def test_export_dry_run_prints_preflight_and_writes_nothing(
+    tmp_path: Path, capsys
+) -> None:
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    dataset_dir = project_dir / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "s1", object_tags={2: ["sphere"]})
+
+    config_path = project_dir / "rv-ds.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "dataset": {"path": "./dataset"},
+                "pipeline": {"output_dir": "./exports"},
+                "extractor": {
+                    "spec": "default-seg",
+                    "options": {
+                        "class_mapping": [
+                            {"class": "sphere", "required_tags": ["sphere"]}
+                        ]
+                    },
+                },
+                "exporter": {
+                    "spec": "default-preview-seg",
+                    "options": {"include_empty": True},
+                },
+                "debug": {"dump_ir": False, "fail_on_warning": False},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    exit_code = main(["export", "--config", str(config_path), "--dry-run"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert f"config_ok: {config_path.resolve()}" in output
+    assert f"dataset: {dataset_dir.resolve()}" in output
+    assert f"output_dir: {(project_dir / 'exports').resolve()}" in output
+    assert "extractor: default-seg" in output
+    assert "exporter: default-preview-seg" in output
+    assert "summary: valid_samples=1 class_names=1" in output
+    assert "dry_run: no files written" in output
+    assert not (project_dir / "exports").exists()
+
+
 def test_validate_rejects_old_unified_schema(tmp_path: Path, capsys) -> None:
     dataset_dir = tmp_path / "dataset"
     dataset_dir.mkdir()
