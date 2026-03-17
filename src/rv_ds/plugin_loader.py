@@ -18,7 +18,6 @@ from .plugins.exporters.yolo import (
     DefaultYoloSegExporter,
 )
 from .plugins.extractors.seg_bbox import (
-    DefaultBothExtractor,
     DefaultDetectionExtractor,
     DefaultSegmentExtractor,
 )
@@ -40,7 +39,6 @@ class LoadedPlugin:
 BUILTIN_EXTRACTORS: dict[str, type[ExtractorType]] = {
     "default-seg": DefaultSegmentExtractor,
     "default-bbox": DefaultDetectionExtractor,
-    "default-seg-bbox": DefaultBothExtractor,
 }
 
 BUILTIN_EXPORTERS: dict[str, type[ExporterType]] = {

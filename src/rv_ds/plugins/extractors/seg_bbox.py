@@ -20,7 +20,7 @@ from ...plugin_api import (
 from ...scanner import SamplePaths
 from ...sdk import extract_bbox, extract_largest_polygon, normalize_bbox
 
-TaskMode = Literal["detect", "segment", "both"]
+TaskMode = Literal["detect", "segment"]
 
 
 class ClassMappingRule(PluginOptions):
@@ -202,20 +202,18 @@ class DefaultExtractor(BaseExtractor[DefaultExtractorOptions]):
             mask = object_mask(index_map, obj.index)
             area_px = int(mask.sum())
 
-            bbox_xyxy = None
+            bbox_xyxy = extract_bbox(mask)
             bbox_norm = None
             polygon_norm = None
 
-            if self.mode in ("detect", "both"):
-                bbox_xyxy = extract_bbox(mask)
-                if bbox_xyxy is not None:
-                    bbox_norm = normalize_bbox(
-                        bbox_xyxy,
-                        width=index_map.shape[1],
-                        height=index_map.shape[0],
-                    )
+            if bbox_xyxy is not None:
+                bbox_norm = normalize_bbox(
+                    bbox_xyxy,
+                    width=index_map.shape[1],
+                    height=index_map.shape[0],
+                )
 
-            if self.mode in ("segment", "both"):
+            if self.mode == "segment":
                 area_ratio = float(area_px) / float(image_area)
                 if area_ratio >= self.opts.min_segment_area:
                     polygon_norm = extract_largest_polygon(
@@ -223,7 +221,9 @@ class DefaultExtractor(BaseExtractor[DefaultExtractorOptions]):
                         epsilon_ratio=self.opts.epsilon_ratio,
                     )
 
-            if bbox_xyxy is None and polygon_norm is None:
+            if self.mode == "detect" and bbox_xyxy is None:
+                continue
+            if self.mode == "segment" and polygon_norm is None:
                 continue
 
             instances.append(
@@ -258,17 +258,14 @@ class DefaultExtractor(BaseExtractor[DefaultExtractorOptions]):
 
 class DefaultSegmentExtractor(DefaultExtractor):
     MODE: TaskMode = "segment"
-    produced_features = frozenset({INSTANCE_CLASS, INSTANCE_SEGMENT})
+    produced_features = frozenset(
+        {INSTANCE_CLASS, INSTANCE_SEGMENT, INSTANCE_BBOX}
+    )
 
 
 class DefaultDetectionExtractor(DefaultExtractor):
     MODE: TaskMode = "detect"
     produced_features = frozenset({INSTANCE_CLASS, INSTANCE_BBOX})
-
-
-class DefaultBothExtractor(DefaultExtractor):
-    MODE: TaskMode = "both"
-    produced_features = frozenset({INSTANCE_CLASS, INSTANCE_SEGMENT, INSTANCE_BBOX})
 
 
 def _resolve_class(

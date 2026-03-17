@@ -77,7 +77,7 @@ debug:
 
 ## Built-in Plugins
 
-- Extractors: `default-bbox`, `default-seg`, `default-seg-bbox`
+- Extractors: `default-bbox`, `default-seg`
 - Exporters: `default-preview-bbox`, `default-preview-seg`, `default-yolo-bbox`, `default-yolo-seg`
 
 ## Compatibility

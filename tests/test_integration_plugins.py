@@ -159,7 +159,7 @@ def test_builtin_extractor_and_exporter(tmp_path: Path) -> None:
         dataset_dir=dataset_dir,
         output_dir=tmp_path / "exports",
         image_file="Image.png",
-        extractor_spec="default-seg-bbox",
+        extractor_spec="default-seg",
         extractor_opts={
             "class_mapping": [{"class": "sphere", "required_tags": ["sphere"]}],
             "target_tags": ["sphere"],

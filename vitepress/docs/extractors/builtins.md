@@ -7,8 +7,7 @@ Use an extractor to turn RV samples into class, bbox, and segment records for th
 | Extractor | Produces | Use for |
 | --- | --- | --- |
 | `default-bbox` | `INSTANCE_CLASS`, `INSTANCE_BBOX` | detection |
-| `default-seg` | `INSTANCE_CLASS`, `INSTANCE_SEGMENT` | segmentation |
-| `default-seg-bbox` | `INSTANCE_CLASS`, `INSTANCE_SEGMENT`, `INSTANCE_BBOX` | exporters that need both |
+| `default-seg` | `INSTANCE_CLASS`, `INSTANCE_SEGMENT`, `INSTANCE_BBOX` | segmentation and segmentation-derived bbox exports |
 
 ## Common Config
 
@@ -56,6 +55,5 @@ Rules:
 
 ## Which One Should I Use?
 
-- Pick `default-bbox` for `default-yolo-bbox` and `default-preview-bbox`
-- Pick `default-seg` for `default-yolo-seg`
-- Pick `default-seg-bbox` only if the exporter needs both boxes and segments
+- Pick `default-bbox` for detection-only exports
+- Pick `default-seg` for segmentation exports and any export that can use segmentation-derived boxes

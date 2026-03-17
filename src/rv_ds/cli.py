@@ -129,7 +129,6 @@ def _handle_init(dataset_dir: Path, output_config: Path, force: bool) -> int:
         [
             ("1", "detection"),
             ("2", "segmentation"),
-            ("3", "both"),
         ],
         default="2",
     )
@@ -380,9 +379,9 @@ def _prompt_choice(prompt: str, options: list[tuple[str, str]], default: str) ->
 
 def _prompt_output_format(task: str) -> str:
     formats = ["preview"]
-    if task in {"detection", "both"}:
+    if task == "detection":
         formats.append("yolo_bbox")
-    if task in {"segmentation", "both"}:
+    if task == "segmentation":
         formats.append("yolo_seg")
 
     options = [(str(index), value) for index, value in enumerate(formats, start=1)]
@@ -394,7 +393,6 @@ def _select_builtin_extractor_spec(task: str) -> str:
     extractor_by_task = {
         "detection": "default-bbox",
         "segmentation": "default-seg",
-        "both": "default-seg-bbox",
     }
     return cast(str, extractor_by_task[task])
 

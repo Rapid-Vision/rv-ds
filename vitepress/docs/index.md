@@ -54,7 +54,7 @@ Relative paths are resolved from the config file location.
 - `default-bbox` + `default-yolo-bbox`: detection dataset
 - `default-seg` + `default-yolo-seg`: segmentation dataset
 - `default-bbox` + `default-preview-bbox`: bbox preview images
-- `default-seg` or `default-seg-bbox` + `default-preview-seg`: segmentation preview images
+- `default-seg` + `default-preview-seg`: segmentation preview images
 
 ## CLI
 

@@ -188,21 +188,9 @@ def list_builtin_capabilities() -> dict[str, Any]:
             "extractor": "default-seg",
             "exporter": "default-yolo-seg",
         },
-        "both-preview": {
-            "extractor": "default-seg-bbox",
-            "exporter": "default-preview-seg",
-        },
-        "both-yolo_bbox": {
-            "extractor": "default-seg-bbox",
-            "exporter": "default-yolo-bbox",
-        },
-        "both-yolo_seg": {
-            "extractor": "default-seg-bbox",
-            "exporter": "default-yolo-seg",
-        },
     }
     return {
-        "extractors": ["default-seg", "default-bbox", "default-seg-bbox"],
+        "extractors": ["default-seg", "default-bbox"],
         "exporters": [
             "default-preview-bbox",
             "default-preview-seg",

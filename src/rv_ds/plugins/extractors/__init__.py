@@ -1,12 +1,6 @@
-from .seg_bbox import (
-    DefaultBothExtractor,
-    DefaultDetectionExtractor,
-    DefaultExtractor,
-    DefaultSegmentExtractor,
-)
+from .seg_bbox import DefaultDetectionExtractor, DefaultExtractor, DefaultSegmentExtractor
 
 __all__ = [
-    "DefaultBothExtractor",
     "DefaultDetectionExtractor",
     "DefaultExtractor",
     "DefaultSegmentExtractor",
