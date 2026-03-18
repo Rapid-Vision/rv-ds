@@ -301,6 +301,9 @@ def test_export_uses_yaml_config(tmp_path: Path, capsys) -> None:
 
     assert exit_code == 0
     output = capsys.readouterr().out
+    assert "progress: start:" in output
+    assert "progress: samples:" in output
+    assert "progress: done:" in output
     export_dir_line = next(line for line in output.splitlines() if line.startswith("export_dir="))
     export_dir = Path(export_dir_line.split("=", 1)[1])
     assert not (export_dir / "images" / "s1.png").exists()

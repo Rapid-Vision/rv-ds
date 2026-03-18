@@ -200,7 +200,10 @@ def _handle_export(config_path: Path, dry_run: bool) -> int:
         print("dry_run: no files written")
         return 0
 
-    result = run_export(build_pipeline_export_config(resolved))
+    result = run_export(
+        build_pipeline_export_config(resolved),
+        progress=lambda message: print(f"progress: {message}"),
+    )
     print(f"export_dir={result.export_dir}")
     print(
         "summary: "

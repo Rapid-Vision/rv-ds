@@ -21,6 +21,7 @@ from .plugin_loader import load_exporter, load_extractor
 from .scanner import SamplePaths, discover_samples
 
 IteratorFactory = Callable[[StreamRequest, int | None], Iterator[SampleRecord]]
+ProgressCallback = Callable[[str], None]
 
 
 @dataclass(frozen=True)
@@ -103,15 +104,30 @@ def load_json_opts(path: Path | None) -> dict[str, Any]:
     return payload
 
 
-def run_export(config: ExportConfig) -> ExportResult:
+def run_export(
+    config: ExportConfig, progress: ProgressCallback | None = None
+) -> ExportResult:
     prepared = prepare_contexts(config)
+    _emit_progress(
+        progress,
+        "start: "
+        f"discovered_samples={len(prepared.samples)} "
+        f"extractor={config.extractor_spec} "
+        f"exporter={config.exporter_spec}",
+    )
     describe_phase = run_extractor_describe(config, prepared)
     if prepared.extraction_ctx.warnings and config.fail_on_plugin_warning:
         joined = " | ".join(prepared.extraction_ctx.warnings)
         raise ValidationFailure(
             f"extractor produced warnings and fail-on-warning is set: {joined}"
         )
-    export_phase = run_exporter(config, prepared, describe_phase)
+    export_phase = run_exporter(config, prepared, describe_phase, progress)
+    _emit_progress(
+        progress,
+        "done: "
+        f"extracted_samples={export_phase.stream_state.yielded_samples} "
+        f"outputs={len(export_phase.export_ctx.outputs)}",
+    )
     return finalize_meta(config, prepared, describe_phase, export_phase)
 
 
@@ -181,11 +197,13 @@ def run_exporter(
     config: ExportConfig,
     prepared: PreparedContexts,
     describe_phase: DescribePhaseResult,
+    progress: ProgressCallback | None = None,
 ) -> ExportPhaseResult:
     sample_iterator, stream_state = _build_sample_iterator(
         config=config,
         prepared=prepared,
         collect_samples=config.dump_ir,
+        progress=progress,
     )
     export_ctx = ExportContext(
         dataset_info=describe_phase.dataset_info,
@@ -239,9 +257,28 @@ def _build_sample_iterator(
     config: ExportConfig,
     prepared: PreparedContexts,
     collect_samples: bool,
+    progress: ProgressCallback | None = None,
 ) -> tuple[IteratorFactory, StreamState]:
     state = StreamState()
     extractor_max_samples = getattr(prepared.extractor.opts, "max_samples", None)
+    progress_total = (
+        min(len(prepared.samples), extractor_max_samples)
+        if extractor_max_samples is not None
+        else len(prepared.samples)
+    )
+    progress_interval = max(1, progress_total // 20) if progress_total else 1
+
+    def _report_progress(force: bool = False) -> None:
+        if state.yielded_samples == 0 and state.processed_candidates == 0:
+            return
+        if not force and state.processed_candidates % progress_interval != 0:
+            return
+        _emit_progress(
+            progress,
+            "samples: "
+            f"processed={state.processed_candidates}/{progress_total} "
+            f"yielded={state.yielded_samples}",
+        )
 
     def _iter(request: StreamRequest, max_samples: int | None) -> Iterator[SampleRecord]:
         if state.stream_started:
@@ -285,6 +322,7 @@ def _build_sample_iterator(
             yield extracted
 
             yielded_this_call += 1
+            _report_progress()
             if (
                 extractor_max_samples is not None
                 and state.yielded_samples >= extractor_max_samples
@@ -293,7 +331,16 @@ def _build_sample_iterator(
             if max_samples is not None and yielded_this_call >= max_samples:
                 break
 
+        _report_progress(force=True)
+
     return _iter, state
+
+
+def _emit_progress(
+    progress: ProgressCallback | None, message: str
+) -> None:
+    if progress is not None:
+        progress(message)
 
 
 def _validate_feature_contract(
