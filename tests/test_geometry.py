@@ -24,3 +24,14 @@ def test_polygon_extraction() -> None:
     assert polygon is not None
     assert len(polygon) >= 4
     assert all(0.0 <= x <= 1.0 and 0.0 <= y <= 1.0 for x, y in polygon)
+
+
+def test_polygon_extraction_respects_max_polygon_points() -> None:
+    mask = np.zeros((40, 40), dtype=np.uint8)
+    mask[5:35, 5:35] = 1
+    mask[10:30, 10:30] = 0
+
+    polygon = largest_polygon_from_mask(mask, max_polygon_points=4)
+
+    assert polygon is not None
+    assert len(polygon) <= 4

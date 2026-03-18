@@ -12,6 +12,7 @@ extractor:
         required_tags: [cube]
       - class: sphere
         required_tags: [sphere]
+    max_polygon_points: 100
 
 exporter:
   spec: default-preview-seg

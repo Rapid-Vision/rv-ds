@@ -31,3 +31,17 @@ def test_bbox_and_polygon_helpers() -> None:
     polygon = extract_largest_polygon(mask)
     assert polygon is not None
     assert len(polygon) >= 3
+
+
+def test_extract_largest_polygon_accepts_polygon_controls() -> None:
+    mask = np.zeros((20, 20), dtype=np.uint8)
+    mask[2:18, 2:18] = 1
+
+    polygon = extract_largest_polygon(
+        mask,
+        polygon_tolerance=0.5,
+        max_polygon_points=4,
+    )
+
+    assert polygon is not None
+    assert len(polygon) <= 4

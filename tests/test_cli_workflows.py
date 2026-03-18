@@ -94,6 +94,7 @@ def test_init_writes_yaml_config(monkeypatch, tmp_path: Path, capsys) -> None:
     assert [
         item["class"] for item in payload["extractor"]["options"]["class_mapping"]
     ] == ["cube", "sphere"]
+    assert payload["extractor"]["options"]["max_polygon_points"] == 100
     assert payload["exporter"]["options"]["splits"] == {"train": 0.8, "val": 0.2}
     assert f"rv-ds export --config {config_path.resolve()}" in capsys.readouterr().out
 
@@ -117,6 +118,7 @@ def test_init_preview_config_sets_extractor_max_samples(
     payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     assert payload["exporter"]["spec"] == "default-preview-seg"
     assert payload["extractor"]["options"]["max_samples"] == 100
+    assert payload["extractor"]["options"]["max_polygon_points"] == 100
 
 
 def test_init_fails_for_invalid_dataset(tmp_path: Path, capsys) -> None:

@@ -35,7 +35,8 @@ def normalize_bbox(
 
 def largest_polygon_from_mask(
     mask: np.ndarray,
-    epsilon_ratio: float = 0.002,
+    polygon_tolerance: float = 1.0,
+    max_polygon_points: int | None = None,
 ) -> list[tuple[float, float]] | None:
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
@@ -49,7 +50,14 @@ def largest_polygon_from_mask(
     if perimeter <= 0:
         return None
 
-    approx = cv2.approxPolyDP(contour, epsilon_ratio * perimeter, True)
+    approx = cv2.approxPolyDP(contour, polygon_tolerance, True)
+    if max_polygon_points is not None:
+        tolerance = polygon_tolerance
+        while len(approx) > max_polygon_points:
+            tolerance *= 1.5
+            approx = cv2.approxPolyDP(contour, tolerance, True)
+            if len(approx) <= MIN_CONTOUR_POINTS:
+                break
     points = approx.reshape(-1, 2)
     if len(points) < MIN_CONTOUR_POINTS:
         return None

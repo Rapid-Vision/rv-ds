@@ -75,7 +75,8 @@ class DefaultExtractorOptions(PluginOptions):
     max_samples: int | None = Field(default=None, ge=1)
     include_unmapped: bool = False
     unmapped_class_name: str = "unmapped"
-    epsilon_ratio: float = 0.002
+    polygon_tolerance: float = 1.0
+    max_polygon_points: int | None = Field(default=None, ge=3)
     min_segment_area: float = 0.0
 
     @field_validator("target_tags", "require_tags", "exclude_tags", mode="before")
@@ -101,11 +102,11 @@ class DefaultExtractorOptions(PluginOptions):
             validated[key.strip()] = count
         return validated
 
-    @field_validator("epsilon_ratio")
+    @field_validator("polygon_tolerance")
     @classmethod
-    def _validate_epsilon_ratio(cls, value: float) -> float:
+    def _validate_polygon_tolerance(cls, value: float) -> float:
         if value < 0.0:
-            raise ValueError("epsilon_ratio must be a non-negative number")
+            raise ValueError("polygon_tolerance must be a non-negative number")
         return value
 
     @field_validator("min_segment_area")
@@ -219,7 +220,8 @@ class DefaultExtractor(BaseExtractor[DefaultExtractorOptions]):
                 if area_ratio >= self.opts.min_segment_area:
                     polygon_norm = extract_largest_polygon(
                         mask,
-                        epsilon_ratio=self.opts.epsilon_ratio,
+                        polygon_tolerance=self.opts.polygon_tolerance,
+                        max_polygon_points=self.opts.max_polygon_points,
                     )
 
             if self.mode == "detect" and bbox_xyxy is None:

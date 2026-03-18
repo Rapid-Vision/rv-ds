@@ -72,6 +72,26 @@ def test_load_builtin_segment_extractor_rejects_invalid_max_samples() -> None:
         )
 
 
+def test_load_builtin_segment_extractor_rejects_invalid_polygon_controls() -> None:
+    with pytest.raises(ValidationFailure, match="polygon_tolerance"):
+        load_extractor(
+            "default-seg",
+            {
+                "class_mapping": [{"class": "sphere", "required_tags": ["sphere"]}],
+                "polygon_tolerance": -1.0,
+            },
+        )
+
+    with pytest.raises(ValidationFailure, match="max_polygon_points"):
+        load_extractor(
+            "default-seg",
+            {
+                "class_mapping": [{"class": "sphere", "required_tags": ["sphere"]}],
+                "max_polygon_points": 2,
+            },
+        )
+
+
 def test_load_path_extractor_plugin(tmp_path: Path) -> None:
     plugin = tmp_path / "extractor.py"
     plugin.write_text(

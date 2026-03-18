@@ -33,7 +33,8 @@ extractor:
 - `require_tags`: require scene tags
 - `exclude_tags`: skip scene tags
 - `max_samples`: cap how many samples the extractor yields
-- `epsilon_ratio`: polygon simplification for segmentation
+- `polygon_tolerance`: polygon simplification tolerance in pixels
+- `max_polygon_points`: cap the number of points in produced polygons
 - `min_segment_area`: skip very small segments
 
 ## `class_mapping`

@@ -427,6 +427,8 @@ def _build_builtin_extractor_options(
     }
     if output_format == "preview":
         options["max_samples"] = 100
+    if output_format in {"preview", "yolo_seg"}:
+        options["max_polygon_points"] = 100
     return options
 
 
