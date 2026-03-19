@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import NoReturn, cast
 
 from .app_config import (
-    DEFAULT_CONFIG_PATH,
     DEFAULT_IMAGE_FILE,
     DEFAULT_OUTPUT_DIR,
     AppConfig,
@@ -42,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--output-config",
         "-o",
         type=Path,
-        default=Path(DEFAULT_CONFIG_PATH),
+        default=None,
         help="Path to write the generated YAML config",
     )
     init_parser.add_argument(
@@ -100,13 +99,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
 
-def _handle_init(dataset_dir: Path, output_config: Path, force: bool) -> int:
+def _handle_init(dataset_dir: Path, output_config: Path | None, force: bool) -> int:
     dataset_dir = dataset_dir.resolve()
-    output_config = _resolve_output_config_path(output_config)
-    if output_config.exists() and not force:
-        raise ValidationFailure(
-            f"config file already exists: '{output_config}'. Use --force to overwrite it."
-        )
 
     if not dataset_dir.exists() or not dataset_dir.is_dir():
         raise ValidationFailure(f"dataset directory does not exist: '{dataset_dir}'")
@@ -150,6 +144,13 @@ def _handle_init(dataset_dir: Path, output_config: Path, force: bool) -> int:
     include_empty = _prompt_yes_no(
         "Include empty samples", default=include_empty_default
     )
+    output_config = _resolve_output_config_path(
+        output_config, _default_config_filename(task, output_format)
+    )
+    if output_config.exists() and not force:
+        raise ValidationFailure(
+            f"config file already exists: '{output_config}'. Use --force to overwrite it."
+        )
 
     app_config = AppConfig(
         dataset=DatasetConfig(path=dataset_dir),
@@ -355,13 +356,24 @@ def validate_app_config(resolved: ResolvedAppConfig) -> ValidationSummary:
     )
 
 
-def _resolve_output_config_path(output_config: Path) -> Path:
+def _resolve_output_config_path(
+    output_config: Path | None, default_filename: str
+) -> Path:
+    if output_config is None:
+        return Path(default_filename).resolve()
+
     resolved = output_config.resolve()
     if resolved.exists() and resolved.is_dir():
-        return resolved / DEFAULT_CONFIG_PATH
+        return resolved / default_filename
     if resolved.suffix:
         return resolved
-    return resolved / DEFAULT_CONFIG_PATH
+    return resolved / default_filename
+
+
+def _default_config_filename(task: str, output_format: str) -> str:
+    task_suffix = "bbox" if task == "detection" else "seg"
+    output_prefix = "preview" if output_format == "preview" else "yolo"
+    return f"{output_prefix}-{task_suffix}.yaml"
 
 
 def _print_inspect_report(report: InspectReport) -> None:

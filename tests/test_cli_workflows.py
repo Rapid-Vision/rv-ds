@@ -232,7 +232,26 @@ def test_init_accepts_output_config_directory(monkeypatch, tmp_path: Path) -> No
     exit_code = main(["init", str(dataset_dir), "--output-config", str(output_dir)])
 
     assert exit_code == 0
-    assert (output_dir / "rv-ds.yaml").exists()
+    assert (output_dir / "yolo-seg.yaml").exists()
+
+
+def test_init_uses_mode_specific_default_output_filename(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "s1", object_tags={2: ["sphere"]})
+
+    answers = iter(["1", "1", "", "", ""])
+    monkeypatch.setattr("builtins.input", lambda _: next(answers))
+
+    exit_code = main(["init", str(dataset_dir)])
+
+    assert exit_code == 0
+    config_path = Path("preview-bbox.yaml").resolve()
+    assert config_path.exists()
+    assert f"Wrote config: {config_path}" in capsys.readouterr().out
+    config_path.unlink()
 
 
 def test_validate_resolves_paths_relative_to_config(tmp_path: Path, capsys) -> None:
