@@ -16,6 +16,19 @@ Inspect the dataset first:
 uv run rv-ds inspect ./examples/dataset
 ```
 
+Inspect one sample in detail:
+
+```bash
+uv run rv-ds inspect ./examples/dataset --sample 237dcc75-3431-4395-bf72-d1cce4f80776
+```
+
+You can also select a sample by its 1-based lexicographic index or pick one at random:
+
+```bash
+uv run rv-ds inspect ./examples/dataset --sample 1
+uv run rv-ds inspect ./examples/dataset --sample random
+```
+
 Generate a starter config with the terminal wizard:
 
 ```bash
@@ -37,6 +50,7 @@ uv run rv-ds export --config ./rv-ds.yaml
 ## Commands
 
 - `rv-ds inspect <dataset_dir>`: summarize sample health, tags, and suggested class mappings
+- `rv-ds inspect <dataset_dir> --sample <sample>`: show mask counts, area stats, polygon-point stats, and per-mask details for one sample selected by directory name, 1-based lexicographic index, or `random`
 - `rv-ds init [dataset_dir]`: generate a YAML config interactively
 - `rv-ds validate --config <path>`: validate config and plugin compatibility
 - `rv-ds export --config <path>`: execute an export from YAML config

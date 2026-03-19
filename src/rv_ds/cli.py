@@ -1,5 +1,6 @@
 import argparse
 import json
+import random
 import sys
 from pathlib import Path
 from typing import NoReturn, cast
@@ -20,7 +21,7 @@ from .app_config import (
     load_app_config,
 )
 from .errors import RVExportError, ValidationFailure
-from .inspector import InspectReport, inspect_dataset
+from .inspector import InspectReport, SampleInspectReport, inspect_dataset, inspect_sample
 from .pipeline import run_export
 from .plugin_api import ExtractionContext
 from .plugin_loader import load_exporter, load_extractor
@@ -53,6 +54,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inspect_parser.add_argument("dataset_dir", type=Path)
     inspect_parser.add_argument(
+        "--sample",
+        type=str,
+        help="Inspect a single sample by directory name, lexicographic index, or 'random'",
+    )
+    inspect_parser.add_argument(
         "--json", action="store_true", help="Print machine-readable JSON"
     )
 
@@ -81,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "init":
             return _handle_init(args.dataset_dir, args.output_config, args.force)
         if args.command == "inspect":
-            return _handle_inspect(args.dataset_dir, args.json)
+            return _handle_inspect(args.dataset_dir, args.json, args.sample)
         if args.command == "export":
             return _handle_export(args.config, args.dry_run)
         if args.command == "validate":
@@ -169,10 +175,19 @@ def _handle_init(dataset_dir: Path, output_config: Path, force: bool) -> int:
     return 0
 
 
-def _handle_inspect(dataset_dir: Path, as_json: bool) -> int:
+def _handle_inspect(dataset_dir: Path, as_json: bool, sample_id: str | None) -> int:
     dataset_dir = dataset_dir.resolve()
     if not dataset_dir.exists() or not dataset_dir.is_dir():
         raise ValidationFailure(f"dataset directory does not exist: '{dataset_dir}'")
+
+    if sample_id:
+        resolved_sample_id = _resolve_sample_selector(dataset_dir, sample_id)
+        report = inspect_sample(dataset_dir, DEFAULT_IMAGE_FILE, resolved_sample_id)
+        if as_json:
+            print(json.dumps(report.model_dump(mode="json"), indent=2))
+            return 0
+        _print_sample_inspect_report(report)
+        return 0
 
     report = inspect_dataset(dataset_dir, DEFAULT_IMAGE_FILE)
     if as_json:
@@ -181,6 +196,33 @@ def _handle_inspect(dataset_dir: Path, as_json: bool) -> int:
 
     _print_inspect_report(report)
     return 0
+
+
+def _resolve_sample_selector(dataset_dir: Path, sample_selector: str) -> str:
+    sample_dirs = sorted(
+        [path for path in dataset_dir.iterdir() if path.is_dir()],
+        key=lambda path: path.name,
+    )
+    if not sample_dirs:
+        raise ValidationFailure(f"dataset directory '{dataset_dir}' has no sample folders")
+
+    if sample_selector == "random":
+        return random.choice(sample_dirs).name
+
+    direct_match = dataset_dir / sample_selector
+    if direct_match.exists() and direct_match.is_dir():
+        return direct_match.name
+
+    if sample_selector.isdecimal():
+        sample_index = int(sample_selector)
+        if sample_index < 1 or sample_index > len(sample_dirs):
+            raise ValidationFailure(
+                "sample index out of range: "
+                f"{sample_index}. Expected 1..{len(sample_dirs)}."
+            )
+        return sample_dirs[sample_index - 1].name
+
+    return sample_selector
 
 
 def _handle_export(config_path: Path, dry_run: bool) -> int:
@@ -363,6 +405,67 @@ def _print_inspect_report(report: InspectReport) -> None:
         print("Recommendations:")
         for recommendation in report.recommendations:
             print(f"  - {recommendation}")
+
+
+def _print_sample_inspect_report(report: SampleInspectReport) -> None:
+    print(f"Dataset: {report.dataset_dir}")
+    print(f"Sample: {report.sample_id}")
+    print(f"Image file: {report.image_file}")
+    print(f"Resolution: {report.image_width}x{report.image_height}")
+    print(
+        "Masks: "
+        f"total={report.mask_count} "
+        f"meta_objects={report.object_count_in_meta}"
+    )
+    if report.area_px is not None:
+        print(
+            "Areas (px): "
+            f"min={report.area_px.min} "
+            f"max={report.area_px.max} "
+            f"mean={report.area_px.mean:.2f} "
+            f"total={report.area_px.total}"
+        )
+    else:
+        print("Areas (px): none")
+    if report.polygon_points is not None:
+        print(
+            "Polygon points: "
+            f"min={report.polygon_points.min} "
+            f"max={report.polygon_points.max} "
+            f"mean={report.polygon_points.mean:.2f} "
+            f"total={report.polygon_points.total}"
+        )
+    else:
+        print("Polygon points: none")
+    if report.missing_mask_indexes:
+        print(
+            "Missing masks from metadata: "
+            + ", ".join(str(index) for index in report.missing_mask_indexes)
+        )
+    if report.orphan_mask_indexes:
+        print(
+            "Masks missing metadata: "
+            + ", ".join(str(index) for index in report.orphan_mask_indexes)
+        )
+    print("Per-mask stats:")
+    if report.masks:
+        for mask in report.masks:
+            name_part = mask.object_name or "unknown"
+            tags_part = f" tags={','.join(mask.object_tags)}" if mask.object_tags else ""
+            bbox_part = (
+                f" bbox={mask.bbox_xyxy}"
+                if mask.bbox_xyxy is not None
+                else " bbox=none"
+            )
+            print(
+                f"  - index={mask.object_index} "
+                f"name={name_part} "
+                f"area_px={mask.area_px} "
+                f"points={mask.polygon_points}"
+                f"{bbox_part}{tags_part}"
+            )
+    else:
+        print("  - none")
 
 
 def _prompt_choice(prompt: str, options: list[tuple[str, str]], default: str) -> str:

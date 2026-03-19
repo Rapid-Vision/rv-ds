@@ -2,9 +2,51 @@ from collections import Counter
 from itertools import islice
 from pathlib import Path
 
+import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models import load_scene_meta
+from .geometry import bbox_from_mask, largest_polygon_from_mask
+from .mask_ops import object_mask, read_index_map
+from .models import SceneObject, load_scene_meta
+from .errors import ValidationFailure
+
+
+class NumericSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    min: int
+    max: int
+    mean: float
+    total: int
+
+
+class SampleMaskStats(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    object_index: int
+    object_name: str | None = None
+    object_tags: list[str] = Field(default_factory=list)
+    area_px: int
+    polygon_points: int
+    bbox_xyxy: tuple[int, int, int, int] | None = None
+
+
+class SampleInspectReport(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    dataset_dir: Path
+    sample_id: str
+    sample_dir: Path
+    image_file: str
+    image_width: int
+    image_height: int
+    object_count_in_meta: int
+    mask_count: int
+    missing_mask_indexes: list[int] = Field(default_factory=list)
+    orphan_mask_indexes: list[int] = Field(default_factory=list)
+    area_px: NumericSummary | None = None
+    polygon_points: NumericSummary | None = None
+    masks: list[SampleMaskStats] = Field(default_factory=list)
 
 
 class SampleIssue(BaseModel):
@@ -50,6 +92,73 @@ class InspectReport(BaseModel):
     object_tag_combinations: list[TagCombinationCount] = Field(default_factory=list)
     suggested_class_mappings: list[SuggestedClassMapping] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
+
+
+def inspect_sample(dataset_dir: Path, image_file: str, sample_id: str) -> SampleInspectReport:
+    sample_dir = dataset_dir / sample_id
+    if not sample_dir.exists() or not sample_dir.is_dir():
+        raise ValidationFailure(f"sample directory does not exist: '{sample_dir}'")
+
+    meta_path = sample_dir / "_meta.json"
+    index_path = sample_dir / "IndexOB.png"
+    image_path = sample_dir / image_file
+    missing = [
+        path.name
+        for path in (meta_path, index_path, image_path)
+        if not path.exists() or not path.is_file()
+    ]
+    if missing:
+        raise ValidationFailure(
+            f"sample '{sample_id}' is missing required files: {', '.join(missing)}"
+        )
+
+    scene = load_scene_meta(meta_path)
+    index_map = read_index_map(index_path)
+    image_height, image_width = index_map.shape[:2]
+
+    object_by_index = {obj.index: obj for obj in scene.objects}
+    present_indexes = sorted(int(index) for index in np.unique(index_map) if int(index) > 0)
+
+    masks: list[SampleMaskStats] = []
+    for object_index in present_indexes:
+        mask = object_mask(index_map, object_index)
+        area_px = int(np.count_nonzero(mask))
+        if area_px == 0:
+            continue
+
+        polygon = largest_polygon_from_mask(mask)
+        bbox = bbox_from_mask(mask)
+        scene_object = object_by_index.get(object_index)
+        masks.append(
+            SampleMaskStats(
+                object_index=object_index,
+                object_name=scene_object.name if scene_object is not None else None,
+                object_tags=list(scene_object.tags) if scene_object is not None else [],
+                area_px=area_px,
+                polygon_points=len(polygon) if polygon is not None else 0,
+                bbox_xyxy=bbox,
+            )
+        )
+
+    masks.sort(key=lambda item: item.object_index)
+    meta_indexes = sorted(object_by_index)
+    mask_indexes = [item.object_index for item in masks]
+
+    return SampleInspectReport(
+        dataset_dir=dataset_dir,
+        sample_id=sample_id,
+        sample_dir=sample_dir,
+        image_file=image_file,
+        image_width=image_width,
+        image_height=image_height,
+        object_count_in_meta=len(scene.objects),
+        mask_count=len(masks),
+        missing_mask_indexes=sorted(index for index in meta_indexes if index not in set(mask_indexes)),
+        orphan_mask_indexes=sorted(index for index in mask_indexes if index not in set(meta_indexes)),
+        area_px=_summarize_numeric([item.area_px for item in masks]),
+        polygon_points=_summarize_numeric([item.polygon_points for item in masks]),
+        masks=masks,
+    )
 
 
 def inspect_dataset(dataset_dir: Path, image_file: str) -> InspectReport:
@@ -162,3 +271,15 @@ def _build_recommendations(
             "No object tags found; create class mappings manually before export."
         )
     return recommendations
+
+
+def _summarize_numeric(values: list[int]) -> NumericSummary | None:
+    if not values:
+        return None
+
+    return NumericSummary(
+        min=min(values),
+        max=max(values),
+        mean=float(sum(values)) / float(len(values)),
+        total=sum(values),
+    )

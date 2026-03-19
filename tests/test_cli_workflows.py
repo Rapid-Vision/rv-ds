@@ -73,6 +73,94 @@ def test_inspect_json_reports_tags_and_invalid_samples(tmp_path: Path, capsys) -
     assert payload["object_tags"][0]["tag"] == "sphere"
 
 
+def test_inspect_sample_json_reports_mask_statistics(
+    tmp_path: Path, capsys
+) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(
+        dataset_dir,
+        "s1",
+        object_tags={2: ["sphere"], 3: ["cube"], 4: ["missing"]},
+    )
+
+    exit_code = main(["inspect", str(dataset_dir), "--sample", "s1", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["sample_id"] == "s1"
+    assert payload["mask_count"] == 2
+    assert payload["object_count_in_meta"] == 3
+    assert payload["missing_mask_indexes"] == [4]
+    assert payload["orphan_mask_indexes"] == []
+    assert payload["area_px"] == {"min": 36, "max": 36, "mean": 36.0, "total": 72}
+    assert payload["polygon_points"]["min"] >= 4
+    assert payload["masks"][0]["object_index"] == 2
+    assert payload["masks"][0]["object_name"] == "o2"
+
+
+def test_inspect_sample_text_reports_orphan_masks(tmp_path: Path, capsys) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "s1", object_tags={2: ["sphere"]})
+
+    index_map = np.zeros((16, 16), dtype=np.uint16)
+    index_map[1:5, 1:5] = 2
+    index_map[8:12, 8:12] = 5
+    cv2.imwrite(str(dataset_dir / "s1" / "IndexOB.png"), index_map)
+
+    exit_code = main(["inspect", str(dataset_dir), "--sample", "s1"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Masks: total=2 meta_objects=1" in output
+    assert "Masks missing metadata: 5" in output
+    assert "index=5 name=unknown" in output
+
+
+def test_inspect_sample_accepts_lexicographic_index(
+    tmp_path: Path, capsys
+) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "b-sample", object_tags={2: ["sphere"]})
+    _write_sample(dataset_dir, "a-sample", object_tags={2: ["cube"]})
+
+    exit_code = main(["inspect", str(dataset_dir), "--sample", "1", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["sample_id"] == "a-sample"
+
+
+def test_inspect_sample_random_selects_sample(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "a-sample", object_tags={2: ["sphere"]})
+    _write_sample(dataset_dir, "b-sample", object_tags={2: ["cube"]})
+
+    monkeypatch.setattr("rv_ds.cli.random.choice", lambda items: items[-1])
+
+    exit_code = main(["inspect", str(dataset_dir), "--sample", "random", "--json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["sample_id"] == "b-sample"
+
+
+def test_inspect_sample_rejects_out_of_range_index(tmp_path: Path, capsys) -> None:
+    dataset_dir = tmp_path / "dataset"
+    dataset_dir.mkdir()
+    _write_sample(dataset_dir, "a-sample", object_tags={2: ["sphere"]})
+
+    exit_code = main(["inspect", str(dataset_dir), "--sample", "2"])
+
+    assert exit_code == 2
+    assert "sample index out of range: 2. Expected 1..1." in capsys.readouterr().err
+
+
 def test_init_writes_yaml_config(monkeypatch, tmp_path: Path, capsys) -> None:
     dataset_dir = tmp_path / "dataset"
     dataset_dir.mkdir()
