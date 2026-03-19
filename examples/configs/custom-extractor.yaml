@@ -1,0 +1,22 @@
+dataset:
+  path: ../dataset
+
+pipeline:
+  output_dir: ../../exports/custom-extractor
+
+extractor:
+  spec: ../plugins/custom-extractor.py
+  options:
+    tags: [cube, sphere]
+
+exporter:
+  spec: default-yolo-bbox
+  options:
+    include_empty: false
+    splits:
+      train: 0.8
+      val: 0.2
+
+debug:
+  dump_ir: false
+  fail_on_warning: false
