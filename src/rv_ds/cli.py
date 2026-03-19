@@ -65,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser = subparsers.add_parser(
         "export", help="Export a dataset using a YAML config"
     )
-    export_parser.add_argument("--config", "-c", required=True, type=Path)
+    export_parser.add_argument("config", type=Path)
     export_parser.add_argument(
         "--dry-run", action="store_true", help="Validate without exporting"
     )
@@ -171,7 +171,7 @@ def _handle_init(dataset_dir: Path, output_config: Path, force: bool) -> int:
     output_config.write_text(dump_app_config(app_config), encoding="utf-8")
 
     print(f"Wrote config: {output_config}")
-    print(f"Next: rv-ds export --config {output_config}")
+    print(f"Next: rv-ds export {output_config}")
     return 0
 
 

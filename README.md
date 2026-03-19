@@ -44,7 +44,7 @@ uv run rv-ds validate --config ./rv-ds.yaml
 Run the export:
 
 ```bash
-uv run rv-ds export --config ./rv-ds.yaml
+uv run rv-ds export ./rv-ds.yaml
 ```
 
 ## Commands
@@ -53,7 +53,7 @@ uv run rv-ds export --config ./rv-ds.yaml
 - `rv-ds inspect <dataset_dir> --sample <sample>`: show mask counts, area stats, polygon-point stats, and per-mask details for one sample selected by directory name, 1-based lexicographic index, or `random`
 - `rv-ds init [dataset_dir]`: generate a YAML config interactively
 - `rv-ds validate --config <path>`: validate config and plugin compatibility
-- `rv-ds export --config <path>`: execute an export from YAML config
+- `rv-ds export <path>`: execute an export from YAML config
 - `rv-ds list`: list built-in extractors, exporters, and presets
 
 ## Config Example

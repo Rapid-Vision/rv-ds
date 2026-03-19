@@ -184,7 +184,7 @@ def test_init_writes_yaml_config(monkeypatch, tmp_path: Path, capsys) -> None:
     ] == ["cube", "sphere"]
     assert payload["extractor"]["options"]["max_polygon_points"] == 100
     assert payload["exporter"]["options"]["splits"] == {"train": 0.8, "val": 0.2}
-    assert f"rv-ds export --config {config_path.resolve()}" in capsys.readouterr().out
+    assert f"rv-ds export {config_path.resolve()}" in capsys.readouterr().out
 
 
 def test_init_preview_config_sets_extractor_max_samples(
@@ -387,7 +387,7 @@ def test_export_uses_yaml_config(tmp_path: Path, capsys) -> None:
         encoding="utf-8",
     )
 
-    exit_code = main(["export", "--config", str(config_path)])
+    exit_code = main(["export", str(config_path)])
 
     assert exit_code == 0
     output = capsys.readouterr().out
@@ -434,7 +434,7 @@ def test_export_dry_run_prints_preflight_and_writes_nothing(
         encoding="utf-8",
     )
 
-    exit_code = main(["export", "--config", str(config_path), "--dry-run"])
+    exit_code = main(["export", str(config_path), "--dry-run"])
 
     assert exit_code == 0
     output = capsys.readouterr().out
