@@ -30,14 +30,14 @@ def test_write_data_yaml_with_splits(tmp_path: Path) -> None:
     write_data_yaml(
         path,
         ["cube", "sphere"],
-        splits={"train": "train/images", "val": "val/images", "test": "test/images"},
+        splits={"train": "./train/", "val": "./val/", "test": "./test/"},
     )
 
     parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert parsed == {
         "path": ".",
-        "train": "train/images",
-        "val": "val/images",
-        "test": "test/images",
+        "train": "./train/",
+        "val": "./val/",
+        "test": "./test/",
         "names": ["cube", "sphere"],
     }

@@ -178,8 +178,8 @@ def test_builtin_extractor_and_exporter(tmp_path: Path) -> None:
         (result.export_dir / "data.yaml").read_text(encoding="utf-8")
     )
     assert data_yaml["names"] == ["sphere"]
-    assert data_yaml["train"] == "train/images"
-    assert data_yaml["val"] == "val/images"
+    assert data_yaml["train"] == "./train/"
+    assert data_yaml["val"] == "./val/"
     assert len(label.read_text(encoding="utf-8").strip().split()) > 5
 
 
@@ -290,9 +290,9 @@ def test_builtin_yolo_exporter_supports_train_val_test_split(tmp_path: Path) -> 
         (result.export_dir / "data.yaml").read_text(encoding="utf-8")
     )
 
-    assert data_yaml["train"] == "train/images"
-    assert data_yaml["val"] == "val/images"
-    assert data_yaml["test"] == "test/images"
+    assert data_yaml["train"] == "./train/"
+    assert data_yaml["val"] == "./val/"
+    assert data_yaml["test"] == "./test/"
     assert len(list((result.export_dir / "train" / "labels").glob("*.txt"))) == 3
     assert len(list((result.export_dir / "val" / "labels").glob("*.txt"))) == 1
     assert len(list((result.export_dir / "test" / "labels").glob("*.txt"))) == 1

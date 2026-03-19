@@ -90,7 +90,7 @@ class _BaseYoloExporter(BaseExporter[DefaultYoloExporterOptions]):
         write_data_yaml(
             data_yaml_path,
             ctx.dataset_info.class_names,
-            splits={name: f"{name}/images" for name in split_to_samples},
+            splits={name: f"./{name}/" for name in split_to_samples},
         )
         ctx.add_output(data_yaml_path)
 
