@@ -1,0 +1,1 @@
+import{_ as i,o as a,c as t,ai as e}from"./chunks/framework.9a4VPoes.js";const g=JSON.parse('{"title":"Getting Started","description":"","frontmatter":{},"headers":[],"relativePath":"index.md","filePath":"index.md"}'),n={name:"index.md"};function l(h,s,p,k,r,d){return a(),t("div",null,[...s[0]||(s[0]=[e("",16)])])}const c=i(n,[["render",l]]);export{g as __pageData,c as default};
