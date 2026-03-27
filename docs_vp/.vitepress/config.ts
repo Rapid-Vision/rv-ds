@@ -3,6 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   srcDir: 'docs',
   title: 'rv-ds',
+  base: "/rv-ds/",
   description: 'Minimal docs for using rv-ds and writing plugins',
   themeConfig: {
     nav: [
