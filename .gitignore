@@ -21,3 +21,5 @@ tmp/
 exports/
 
 .DS_Store
+
+vitepress/.vitepress/cache/
